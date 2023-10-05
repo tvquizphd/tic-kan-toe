@@ -1,0 +1,73 @@
+.wrapper {
+  z-index: 100;
+  display: grid;
+  font-size: 150%;
+  justify-content: center;
+  grid-template-columns: 75%;
+  grid-template-rows: auto 1fr;
+  box-shadow: var(--the-box-shadow);
+  padding-top: var(--the-big-padding);
+  font-family: var(--thick-font-family);
+  border-radius: var(--the-border-radius);
+  background-color: var(--main-background);
+
+  & > .center {
+    display: grid;
+    padding: var(--the-big-padding);
+    grid-template-rows: auto 1fr;
+    box-shadow: var(--the-box-shadow);
+    border-radius: var(--the-border-radius);
+    background-color: var(--modal-background);
+
+    & > .search {
+      border: none;
+      font-size: 100%;
+      line-height: 2em;
+      background: none;
+      box-shadow: var(--the-box-shadow);
+      padding-top: var(--the-padding);
+      padding-left: var(--the-big-padding);
+      font-family: var(--thin-font-family);
+      border-radius: var(--the-border-radius);
+    }
+    & > .search:focus-visible {
+      box-shadow: var(--chosen-box-shadow);
+      border-radius: var(--the-border-radius);
+      font-family: var(--thick-font-family);
+      outline: none;
+      border: none;
+    }
+
+    & > .results {
+      margin: var(--the-padding);
+      padding: var(--the-big-padding);
+      border-radius: var(--the-border-radius);
+      background-color: var(--white-background);
+      justify-items: stretch;
+      align-items: stretch;
+      max-height: 10em;
+      overflow: scroll;
+
+      & > div {
+        border-bottom: 2px solid white;
+        grid-template-columns: 64px 1fr auto;
+        grid-template-rows: 64px;
+        align-items: center;
+        display: grid;
+
+        & > img {
+          filter: var(--the-drop-shadow);
+          max-height: 64px;
+        }
+
+        & > div > .accept {
+          cursor: pointer;
+          padding: var(--the-padding) var(--the-big-padding);
+          box-shadow: var(--the-box-shadow);
+          border-radius: var(--the-border-radius);
+          background-color: var(--major-background);
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,138 @@
+.pokemon-grid {
+  grid-template-columns: 2.2em 1fr 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr 1fr;
+  gap: var(--the-padding);
+  color: var(--main-text-color);
+  padding: var(--the-padding);
+  backdrop-filter: var(--the-blur);
+  box-shadow: var(--the-box-shadow);
+  font-family: var(--thick-font-family);
+  border-radius: var(--the-border-radius);
+  background-color: var(--main-background);
+
+  & > div.header.row {
+    & > div {
+      transform: rotate(-90deg) translateY(-1em);
+    }
+  }
+  & > div.header:not(.corner) {
+    & > div {
+      width: 3.5em;
+      text-align: center;
+      background-color: white;
+      box-shadow: var(--the-box-shadow);
+      text-shadow: var(--main-text-shadow);
+      border-radius: var(--the-border-radius);
+    }
+    & > div.bug {
+      background-color: lab(65 -10 55 / .75);
+    }
+    & > div.grass {
+      background-color: lab(65 -20 80 / .75);
+    }
+    & > div.fairy {
+      background-color: lab(70 40 -30 / .75);
+    }
+    & > div.normal {
+      background-color: lab(75 0 0 / .75);
+    }
+    & > div.dragon {
+      background-color: lab(50 10 -45 / .75);
+    }
+    & > div.psychic {
+      background-color: lab(60 50 5 / .75);
+    }
+    & > div.ghost {
+      background-color: lab(35 25 -17 / .75);
+    }
+    & > div.ground {
+      background-color: lab(45 15 30 / .75);
+    }
+    & > div.steel {
+      background-color: lab(70 -15 -20 / .75);
+    }
+    & > div.fire {
+      background-color: lab(60 50 45 / .75);
+    }
+    & > div.flying {
+      background-color: lab(70 -10 -25 / .75);
+    }
+    & > div.ice {
+      background-color: lab(75 -35 -10 / .75);
+    }
+    & > div.electric {
+      background-color: lab(80 5 65 / .75);
+    }
+    & > div.rock {
+      background-color: lab(70 -5 20 / .75);
+    }
+    & > div.dark {
+      background-color: lab(40 5 0 / .75);
+    }
+    & > div.water {
+      background-color: lab(60 -16 -72 / .75);
+    }
+    & > div.fighting {
+      background-color: lab(70 30 60 / .75);
+    }
+    & > div.poison {
+      background-color: lab(50 40 -50 / .75);
+    }
+    display: grid;
+    font-size: 150%;
+    align-items: center;
+    justify-items: center;
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr;
+  }
+
+  & > div:not(.header) {
+    display: grid;
+    border: 2px dashed #FFF;
+    font-family: var(--thin-font-family);
+    padding: 3px var(--the-padding); 
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 1em 1fr 1.5em;
+    text-shadow: 0 0 1px #FFFFFF,
+                 0 0 2px #FFFFFF,
+                 0 0 4px #FFFFFF,
+                 0 0 8px #FFFFFF,
+                 0 0 16px #FFFFFF,
+                 0 0 32px #FFFFFF;
+
+    & > .bottom.full {
+      grid-row: 3 / 4;
+      grid-column: 1 / 3;
+      text-align: center;
+      line-height: 0.8em;
+      font-size: 125%;
+    }
+
+    & > .top.right {
+      grid-row: 1 / 2;
+      grid-column: 2 / 3;
+    }
+
+    & > .full.placeholder.error {
+      box-shadow: var(--error-box-shadow);
+    }
+    & > .full.placeholder {
+      padding-bottom: 100%;
+      grid-column: 1 / 3;
+      grid-row: 1 / 4;
+      width: 100%;
+      height: 0;
+      cursor: pointer;
+      background-position: center center;
+      image-rendering: crisp-edges;
+      background-size: 3em;
+    }
+
+    & > .full {
+      width: 100%;
+      justify-self: center;
+      grid-column: 1 / 3;
+      grid-row: 1 / 4;
+    }
+  }
+}

@@ -1,0 +1,122 @@
+.root {
+  padding: var(--the-padding);
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.footer.grid-row3 {
+  font-size: 175%;
+  font-family: var(--thick-font-family);
+  transform-style: preserve-3d;
+  perspective-origin: 0% -50%;
+  perspective: 250px;
+  display: grid;
+  & > div {
+    & > div {
+      display: grid;
+      & > div.blur.good {
+        background-color: var(--chosen-background);
+        box-shadow: var(--chosen-box-shadow);
+        filter: blur(4px);
+      }
+      & > div.blur.bad {
+        background-color: var(--error-background);
+        box-shadow: var(--error-box-shadow);
+        filter: blur(8px);
+      }
+      & > div.blur {
+        z-index: -1;
+        filter: blur(16px);
+        background-color: var(--white-background);
+      }
+      & > div:not(.blur).good {
+        box-shadow: var(--chosen-box-shadow);
+      }
+      & > div:not(.blur).bad {
+        box-shadow: var(--error-box-shadow);
+      }
+      & > div:not(.blur) {
+        box-shadow: var(--the-box-shadow);
+      }
+      & > div {
+        width: 26px;
+        margin: 12px;
+        height: 40px;
+        padding: 15px;
+        border-radius: var(--egg-border-radius);
+        text-align: center;
+        grid-column: 1;
+        grid-row: 1;
+      }
+    }
+    grid-auto-flow: column;
+    grid-column: 1;
+    grid-row: 1;
+    display: grid;
+    width: 300px;
+  }
+  & > div.back {
+    transform: translateZ(-40px);
+    gap: 10px;
+  }
+  & > div.front {
+    transform: translateX(30px)
+  }
+}
+
+.nav.grid-row1 {
+  padding: var(--the-padding);
+  grid-template-columns: auto 1fr;
+  & > div.options-row {
+    grid-auto-flow: column;
+    align-items: center;
+    cursor: pointer;
+    font-size: 66%;
+    display: grid;
+    & > img {
+      filter: var(--chosen-drop-shadow);
+      padding-left: 0.25em;
+    }
+    & div.tall {
+      user-select: none;
+      color: transparent;
+      text-shadow: var(--white-text-shadow);
+      font-family: var(--display-font);
+      -webkit-text-stroke: 1px black;
+      background-position: center 2.6em;
+      background-clip: text;
+      background-size: 2.8em;
+      line-height: 1em;
+      font-size: 2.5em;
+      padding: 0;
+    }
+    & div.tall.dots {
+      filter: var(--chosen-drop-shadow);
+      background-color: black;
+    }
+  }
+  & > div.main-title {
+    cursor: default;
+    font-size: 150%;
+  }
+  & > div.reset.button {
+    image-rendering: crisp-edges;
+    height: 1.5em;
+    width: 1.5em;
+    padding: 0;
+    & > img {
+      height: 100%;
+      width: 100%;
+    }
+  }
+}
+
+.nav {
+  font-size: 175%;
+  gap: var(--the-padding);
+  color: var(--main-text-color);
+  font-family: var(--thick-font-family);
+
+  & > div {
+    text-align: center;
+  }
+}

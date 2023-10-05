@@ -1,0 +1,135 @@
+@font-face {
+  font-family: "DaysOne";
+  src: url(/days-one.ttf) format("truetype");
+}
+
+@font-face {
+  font-family: "TruculentaThin";
+  src: url(/truculenta-300.ttf) format("truetype");
+}
+
+@font-face {
+  font-family: "TruculentaThick";
+  src: url(/truculenta-500.ttf) format("truetype");
+}
+
+* {
+  --the-padding: 0.4rem;
+  --the-big-padding: 1rem;
+  --main-text-color: #003A0F;
+  --dark-text-color: #00200F;
+  --error-text-color: #3A2000;
+  --gray-background: rgba(96,48,72,0.3);
+  --white-background: rgba(255,225,245,0.5);
+  --modal-background: rgba(220,180,240,0.85);
+  --major-background: rgba(143, 83, 200, 0.3);
+  --main-background: rgba(200, 220, 255, 0.3);
+  --error-background: rgba(160, 94, 94, 0.9);
+  --chosen-background: rgba(240, 160, 80, 0.9);
+  --display-font: "DaysOne", Helvetica, sans-serif;
+  --thin-font-family: "TruculentaThin", Helvetica, sans-serif;
+  --thick-font-family: "TruculentaThick", Helvetica, sans-serif;
+  --the-box-shadow: 0px 0px 3px 1px rgba(0, 0, 0, 0.25),
+                   -2px 4px 4px 0px rgba(0, 0, 0, 0.25),
+                   inset 0px 0px 5px rgba(255, 200, 255, 0.5);
+  --error-box-shadow: 0px 0px 3px 1px rgba(50, 80, 10, 0.25),
+                     -2px 4px 4px 0px rgba(50, 80, 10, 0.25),
+                     inset 0px 2px 8px rgba(180, 90, 20, 1.0),
+                     inset 0px -2px 4px rgba(180, 60, 20, 1.0);
+  --chosen-box-shadow: 0px 0px 3px 1px rgba(80, 50, 10, 0.25),
+                     -2px 4px 4px 0px rgba(80, 50, 10, 0.25),
+                     inset 0px 2px 12px rgba(255, 240, 120, 1.0),
+                     inset 0px -2px 8px rgba(240, 160, 80, 1.0);
+  --chosen-drop-shadow: drop-shadow(0 0 0.75rem rgb(255, 240, 120));
+  --gray-drop-shadow: drop-shadow(0 0 0.75rem rgb(100, 100, 100));
+  --white-text-shadow: rgba(255, 255, 255, 0.8) 0 0 12px;
+  --main-text-shadow: rgba(255, 200, 255, 0.75) 0 0 8px;
+  --error-text-shadow: rgba(128, 60, 10, 0.75) 0 0 8px;
+  --egg-border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%;
+  --the-heading-margin: 0.5em 0;
+  --the-border-radius: 0.25em;
+  --the-hidden-opacity: 0.25;
+  --the-blur: blur( 10px );
+}
+
+.button {
+  padding: var(--the-padding);
+  backdrop-filter: var(--the-blur);
+  border-radius: var(--the-border-radius);
+  background-color: var(--white-background);
+  text-shadow: var(--main-text-shadow);
+  box-shadow: var(--the-box-shadow);
+  color: var(--main-text-color);
+}
+
+button {
+  border: none;
+  cursor: pointer;
+}
+
+.grid-row3 {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.grid-row2 {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.grid-row1 {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.display-none {
+  display: none;
+}
+
+.content {
+  display: contents;
+}
+
+.full-content {
+  grid-column: 1/-1;
+}
+
+.centered-content {
+  grid-column: 2;
+}
+
+.centered {
+  display: grid;
+  place-content: center;
+}
+
+.centered.root.wrapper {
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr auto 1fr;
+  padding-bottom: 3rem;
+  min-height: 100%;
+}
+
+.centered.root.index {
+  grid-row: 2;
+  grid-column: 2;
+  gap: var(--the-padding);
+  margin: 0rem 0.5rem 1rem 0.5rem;
+  grid-template-rows: auto auto auto;
+  grid-template-columns: minmax(400px, 75vh);
+}
+
+.parent.modal {
+  display: grid;
+  grid-row: 1 / 4;
+  grid-column: 1 / 4;
+  pointer-events: none;
+}
+.shown.modal {
+  opacity: 1;
+  pointer-events: all;
+}
+.hidden.modal {
+  opacity: 0;
+  pointer-events: none;
+}
