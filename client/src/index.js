@@ -194,7 +194,11 @@ const main = async () => {
     max_gen, gen_years, failures 
   } = await initialize(api_root);
   const github_root = 'https://raw.githubusercontent.com/PokeAPI/sprites/master';
+  const online = {
+    is_on: false
+  };
   const data = reactive({
+    online,
     phaseMap,
     tries: tries,
     modal: null,
@@ -287,9 +291,8 @@ const main = async () => {
     class: 'centered root index'
   });
   return toTag('div')`
-    ${backdrop}
+    ${backdrop}${centered}
     ${searchModal}${timelineModal}
-    ${centered}
   `({
     class: 'centered root wrapper',
   })(document.body);

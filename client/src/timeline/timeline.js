@@ -1,7 +1,6 @@
 import timelineCSS from 'timeline-css' assert { type: 'css' };
 import globalCSS from 'global-css' assert { type: 'css' };
 import { toTag, CustomTag } from 'tag';
-import { getForms } from 'api';
 
 const toTimelineModal = (data, actions) => {
 
@@ -9,7 +8,6 @@ const toTimelineModal = (data, actions) => {
 
     static get setup() {
       return {
-        updating_search: false,
         max_gen: data.max_gen,
       };
     }
@@ -47,7 +45,7 @@ const toTimelineModal = (data, actions) => {
       const grid = toTag('div')`${to_gen_opts}`({
         'class': 'timeline-grid centered'
       });
-      const label = 'Your most recent Pokémon games?'
+      const label = 'Your latest familiar games?'
 
       const center = toTag('div')`<h3>${label}</h3>${grid}`({
         class: 'center',

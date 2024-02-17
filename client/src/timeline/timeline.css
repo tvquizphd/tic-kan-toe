@@ -1,16 +1,4 @@
 .wrapper {
-  z-index: 100;
-  display: grid;
-  font-size: 150%;
-  justify-content: center;
-  grid-template-columns: auto;
-  grid-template-rows: auto 1fr;
-  box-shadow: var(--the-box-shadow);
-  padding-top: var(--the-big-padding);
-  font-family: var(--thick-font-family);
-  border-radius: var(--the-border-radius);
-  background-color: var(--main-background);
-
   & > .center {
     display: grid;
     max-width: 90vw;

@@ -2,6 +2,7 @@ import navCSS from 'nav-css' assert { type: 'css' };
 import globalCSS from 'global-css' assert { type: 'css' };
 import { backPhase, isFirstPhase } from 'phases';
 import { nextPhase, isLastPhase } from 'phases';
+import { toOnlineMenu } from 'online';
 import { phaseMap } from 'phases';
 import { toTag, CustomTag } from 'tag';
 
@@ -20,6 +21,8 @@ const toNav = (data) => {
     ]
   ];
 
+  const online_menu = toOnlineMenu(data, globalCSS);
+
   class Nav extends CustomTag {
 
     static get setup() {
@@ -32,7 +35,7 @@ const toNav = (data) => {
     get root() {
       const reset = toTag('div')`
       <img src="${data.github_root}/sprites/items/mystery-egg.png">
-      </img>`({
+      </img><div>Reset</div>`({
           class: 'reset button',
           '@click': () => {
             data.resetRevive();
@@ -71,18 +74,30 @@ const toNav = (data) => {
           });
         })
       }
-      const gb_control = toTag('img')``({
-        'src': './data/gb.svg',
-        'height': '40px',
-        'width': '40px'
+      const dex_icon = toTag('img')``({
+        'src': `data/dex.png`
       });
-      const options = toTag('div')`${gb_control}${to_years}`({
+      const options = toTag('div')`${dex_icon}${to_years}`({
         class: 'full-content options-row button',
         '@click': () => {
           data.modal = 'timeline';
         }
       });
-      const nav = toTag('div')`${reset}${header}${options}`({
+      const menu = toTag('div')`
+      <img src="data/gb.svg">
+      </img>`({
+          class: 'menu icon',
+          '@click': () => {
+            data.online.is_on = true;
+          }
+      });
+      const nav = toTag('div')`
+        <div class="main-row full-content">
+          ${reset}${header}${menu}
+        </div> 
+        ${options}
+        ${online_menu}
+      `({
         class: 'nav centered grid-row1'
       });
       // indicator

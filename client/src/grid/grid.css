@@ -123,8 +123,8 @@
       width: 100%;
       height: 0;
       cursor: pointer;
+      image-rendering: pixelated;
       background-position: center center;
-      image-rendering: crisp-edges;
       background-size: 3em;
     }
 

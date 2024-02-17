@@ -65,8 +65,11 @@
 
 .nav.grid-row1 {
   padding: var(--the-padding);
-  grid-template-columns: auto 1fr;
+  image-rendering: pixelated;
+  grid-template-rows: auto auto;
+  grid-template-columns: 1fr;
   & > div.options-row {
+    grid-row: 2;
     grid-auto-flow: column;
     align-items: center;
     cursor: pointer;
@@ -94,19 +97,38 @@
       background-color: black;
     }
   }
-  & > div.main-title {
-    cursor: default;
-    font-size: 150%;
-  }
-  & > div.reset.button {
-    image-rendering: crisp-edges;
-    height: 1.5em;
-    width: 1.5em;
-    padding: 0;
-    & > img {
-      height: 100%;
-      width: 100%;
+  & > div.main-row {
+    grid-row: 1;
+    grid-template-columns: auto 1fr auto;
+    display: grid;
+    & > div.main-title {
+      cursor: default;
+      font-size: 150%;
     }
+    & > div.reset.button {
+      grid-template-columns: auto auto;
+      align-items: center;
+      font-size: 75%;
+      display: grid;
+      height: 2em;
+      padding: 0;
+      & > img {
+        height: 100%;
+      }
+      & > div {
+        margin-left: -0.25em;
+        font-family: var(--thin-font-family);
+        padding-right: var(--the-padding);
+      }
+    }
+    & > div.menu.icon {
+      filter: var(--gray-drop-shadow);
+    }
+  }
+  & > tkt-online.parent.menu {
+    pointer-events: none;
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
   }
 }
 
