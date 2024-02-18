@@ -1,6 +1,8 @@
 import onlineCSS from 'online-css' assert { type: 'css' };
 import globalCSS from 'global-css' assert { type: 'css' };
-import { badge_info } from 'badges';
+import { 
+  badge_info, to_max_gym_badge
+} from 'badges';
 import { toTag, CustomTag } from 'tag';
 
 const toOnlineMenu = (data, actions) => {
@@ -8,36 +10,84 @@ const toOnlineMenu = (data, actions) => {
   class OnlineMenu extends CustomTag {
 
     static get setup() {
+      this._timer = null;
       return {
-        online: JSON.stringify(data.online)
+        max_gen: data.online.max_gen,
+        is_on: data.online.is_on,
+        finding: false,
+        found: false,
+        badge_y: 0
       };
     }
 
     get root() {
+      const disconnect = (close) => {
+        this.data.found = false;
+        this.data.finding = false;
+        data.online.is_on = !close;
+      }
       const menu = toTag('div')`
       <img src="data/gb.svg">
       </img>`({
           class: 'menu icon',
           '@click': () => {
-            data.online.is_on = false;
+            disconnect(true);
           }
       });
       const reset = toTag('div')``();
-      const header = toTag('div')`
-        Multiplayer live on Monday!
-      `();
+      const gen_range = () => {
+        const max_gen = this.data.max_gen;
+        if (max_gen == 1) return 'gen 1';
+        return `gens 1-${max_gen}`;
+      }
+      const action_class = () => {
+        return 'action' + (
+          [' button',''][+this.data.finding]
+        );
+      }
+      const ing = () => {
+        return ['', 'ing'][+this.data.finding];
+      }
+      const action_text = () => {
+        if (this.data.found) {
+          return 'Disconnect?';
+        }
+        return `Search${ing()} gyms`
+      }
+      const action = toTag('div')`
+        ${action_text}
+      `({
+        class: action_class,
+        '@click': () => {
+          if (this.data.found) {
+            return disconnect(false);
+          }
+          if (this.data.finding) return;
+          this.data.finding = true;
+          this.draw();
+        }
+      })
+      const header = () => {
+        if (this.data.found) {
+          return toTag('div')`
+            Found gym! ${action} 
+          `({
+            class: 'header'
+          });
+        }
+        return toTag('div')`
+          ${action} of ${gen_range}
+        `({
+          class: 'header'
+        });
+      }
       const main_row = toTag('div')`
         ${reset}${header}${menu}
       `({
         class: 'main-row'
       });
       const badge_style = () => {
-        const { 
-          badge_offer
-        } = data.online;
-        const offset = Math.max(
-          50 * (badge_offer-1), 0
-        );
+        const offset = this.data.badge_y;
         const badge_png = 'data/badges.png';
         return `
           width: 50px;
@@ -49,12 +99,14 @@ const toOnlineMenu = (data, actions) => {
       }
       const badges = toTag('div')``({
         style: badge_style,
-        class: 'badge icon',
+        class: 'badge icon button',
         '@click': () => {
+          disconnect(false);
           data.offerNewBadge(+1);
         }
       });
       const badge_name = () => {
+        if (this.data.finding) return '...';
         const { all_gym_badges } = badge_info;
         const { badge_offer } = data.online;
         const s = all_gym_badges.get(
@@ -65,9 +117,14 @@ const toOnlineMenu = (data, actions) => {
           s[0].toUpperCase() + s.slice(1) + ' badge'
         );
       }
-      const badge_label = toTag('div')`${badge_name}`();
+      const whose = () => {
+        return ['Your', 'Their'][+this.data.finding];
+      }
+      const badge_label = toTag('div')`
+        ${whose} badge: ${badge_name}
+      `();
       const minor_row = toTag('div')`
-        ${badge_label}${badges}
+        <div></div>${badge_label}${badges}
       `({
         class: 'minor-row'
       });
@@ -79,6 +136,26 @@ const toOnlineMenu = (data, actions) => {
           return 'hidden menu wrapper';
         }
       });
+    }
+
+    async draw() {
+      await new Promise((resolve) => {
+        // Rotate the badge wheel
+        this.data.badge_y = (
+          this.data.badge_y + 10
+        ) % (50 * to_max_gym_badge(
+          this.data.max_gen
+        ));
+        window.setTimeout(() => {
+          window.requestAnimationFrame(resolve);
+        }, 1000/15);
+      });
+      if (!this.data.finding) return;
+      await this.draw();
+    }
+
+    connected() {
+      this.draw();
     }
 
     get styles() {
@@ -96,7 +173,14 @@ const toOnlineMenu = (data, actions) => {
   }
 
   return toTag('online', OnlineMenu)``({
-    online: () => JSON.stringify(data.online),
+    badge_y: () => {
+      const { badge_offer } = data.online;
+      return Math.max(
+        50 * (badge_offer-1), 0
+      );
+    },
+    max_gen: () => data.online.max_gen,
+    is_on: () => data.online.is_on,
     class: 'parent menu'
   });
 

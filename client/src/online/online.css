@@ -10,6 +10,15 @@ div.menu {
   }
   & > div.main-row {
     grid-template-columns: auto 1fr auto;
+    & > div.header {
+      display: grid;
+      gap: var(--the-padding);
+      grid-auto-flow: column;
+      justify-items: center;
+      align-items: center;
+      & > div.action.button {
+      }
+    }
     & > div.menu.icon {
       & > img {
         filter: var(--chosen-drop-shadow);
@@ -17,8 +26,10 @@ div.menu {
     }
   }
   & > div.minor-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
+    gap: var(--the-padding);
     & > div.badge.icon {
+      padding: 0;
       overflow: hidden;
       margin: var(--the-padding);
     }
