@@ -176,8 +176,8 @@ const create_online = (online, opts) => {
   });
 }
 
-const has_failed = (failures, tries) => {
-  return failures.length && tries >= 9;
+const has_failed = (failures, tries, max_tries) => {
+  return failures.length && tries >= max_tries;
 }
 
 const read_hash = (server_meta) => {
@@ -275,13 +275,14 @@ const main = async () => {
     online,
     phaseMap,
     tries: tries,
+    max_tries: 9,
     modal: null,
     content: '',
     cols, rows,
     gen_years,
     failures: failures,
     phase: 0, active_square: 0,
-    err: has_failed(failures, tries),
+    err: has_failed(failures, tries, 9),
     pokemon: pokemon,
     matches: no_matches,
     github_root: github_root,
@@ -305,7 +306,8 @@ const main = async () => {
           to_random_badge(_max_gen)
         ) : null
       });
-      data.err = has_failed(failures, tries);
+      const { max_tries } = data;
+      data.err = has_failed(failures, tries, max_tries);
       data.failures = failures;
       data.pokemon = pokemon;
       data.online = online;
@@ -320,10 +322,7 @@ const main = async () => {
       const repo = 'https://raw.githubusercontent.com/PokeAPI/sprites';
       return `${repo}/master/sprites/pokemon/other/official-artwork//${id}.png`;
     },
-    offerNewBadge: (badge_diff) => {
-      const offer = (
-        data.online.badge_offer + badge_diff
-      );
+    offerNewBadge: (offer) => {
       data.online = update_online(
         data.online, offer
       );
@@ -340,14 +339,19 @@ const main = async () => {
         data.cols[col], data.rows[row]
       ];
       // Show failure status
-      if (data.tries < 9) data.tries += 1;
+      if (data.tries < data.max_tries) {
+        data.tries += 1;
+      }
       const passed = await testGuess(
         data.api_root, mon.id, conditions
       );
       if (!passed) {
         data.failures.push(data.tries);
       }
-      if (has_failed(data.failures, data.tries)) {
+      const failed_args = [
+        data.failures, data.tries, data.max_tries
+      ]
+      if (has_failed(...failed_args)) {
         data.err = 1;
       }
       if (passed) {

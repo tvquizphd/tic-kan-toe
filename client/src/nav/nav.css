@@ -105,6 +105,9 @@
       cursor: default;
       font-size: 150%;
     }
+    & > div.reset.button.highlight {
+      filter: var(--chosen-drop-shadow);
+    }
     & > div.reset.button {
       grid-template-columns: auto auto;
       align-items: center;

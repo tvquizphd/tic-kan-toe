@@ -16,7 +16,13 @@ div.menu {
       grid-auto-flow: column;
       justify-items: center;
       align-items: center;
+    }
+    & > div.header.found {
       & > div.action.button {
+        filter: var(--error-drop-shadow);
+      }
+      & > div:not(.button) {
+        filter: var(--chosen-drop-shadow);
       }
     }
     & > div.menu.icon {
@@ -24,10 +30,21 @@ div.menu {
         filter: var(--chosen-drop-shadow);
       }
     }
+    & > div.menu.icon.found {
+      & > img {
+        filter: var(--error-drop-shadow);
+      }
+    }
   }
   & > div.minor-row {
     grid-template-columns: 1fr auto auto;
     gap: var(--the-padding);
+    & > div.label {
+      line-height: .85;
+      display: grid;
+      text-align: right;
+      grid-auto-flow: row;
+    }
     & > div.badge.icon {
       padding: 0;
       overflow: hidden;

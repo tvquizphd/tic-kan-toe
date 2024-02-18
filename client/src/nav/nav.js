@@ -32,11 +32,20 @@ const toNav = (data) => {
       };
     }
 
+    get need_reset() {
+      return data.tries >= data.max_tries;
+    }
+
     get root() {
+      const reset_class = () => {
+        return 'reset button' + [
+          '', ' highlight'
+        ][+this.need_reset];
+      }
       const reset = toTag('div')`
       <img src="${data.github_root}/sprites/items/mystery-egg.png">
       </img><div>Reset</div>`({
-          class: 'reset button',
+          class: reset_class,
           '@click': () => {
             data.resetRevive();
           }
