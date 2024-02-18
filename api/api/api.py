@@ -63,18 +63,20 @@ async def websocket_endpoint(
         multiplayer=Depends(to_multiplayer)
     ):
     await multiplayer.connect(user)
-    print(multiplayer.users) # TODO
+    def n_users():
+        return len(multiplayer.users)
+    print(f'Opened socket. Now {n_users()} users') 
     while multiplayer.running(user): 
         try:
             data = await user.receive_text()
             await multiplayer.send_text(data)
         except WebSocketDisconnect:
-            print("Disconnected from WebSocket")
             await multiplayer.disconnect(user)
+            print(f"Disconnected. Now {n_users()} users")
             break
         except asyncio.CancelledError:
-            print("Cancelling WebSocket")
             await multiplayer.disconnect(user)
+            print(f"Cancelled. Now {n_users()} users")
             break
 
 '''

@@ -24,8 +24,12 @@ class Multiplayer:
 
     async def send_text(self, data: str):
         for user in self.__users:
-            if self.running(user):
+            if not self.running(user): continue
+            try:
                 await user.send_text(data)
+            except RuntimeError as e:
+                print(repr(e), file=sys.stderr)
+                pass
 
     async def send_json(self, data: dict):
         self.send_text(json.dumps(data))
