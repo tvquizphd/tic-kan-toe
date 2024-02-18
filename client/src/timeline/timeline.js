@@ -19,7 +19,8 @@ const toTimelineModal = (data, actions) => {
           return { n: gen.n, valid };
         });
         return gens.map((opt) => {
-          const valid_class = () => {
+          const option_class = () => {
+            const same_gen = opt.n == this.data.max_gen;
             return ['valid',''][+!opt.valid];
           }
           const art_root = 'https://www.serebii.net/pokemon/generation';
@@ -37,7 +38,7 @@ const toTimelineModal = (data, actions) => {
               data.resetRevive(opt.n);
               data.modal = null;
             },
-            'class': valid_class 
+            'class': option_class 
           });
         });
       }

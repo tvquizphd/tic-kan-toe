@@ -30,16 +30,29 @@ const max_gym_gen = [
 
 const to_random_badge = (max_gen) => {
   const max = to_max_gym_badge(max_gen);
-  return Math.ceil(Math.random() * max);
+  const min = to_min_gym_badge(max_gen);
+  const rational = Math.random() * (max-min);
+  return Math.ceil(rational) + min;
+}
+
+const nearest_gen = (key) => {
+  return [...gen_gym_badges.keys()].sort((a,b) => {
+    return Math.abs(a-key)-Math.abs(b-key);
+  })[0];
 }
 
 const to_max_gym_badge = (generation) => {
-  const gen = Math.min(
-    generation, max_gym_gen
-  );
+  const gen = nearest_gen(generation);
   return [
     ...gen_gym_badges.get(gen).keys()
   ].slice(-1)[0]
+}
+
+const to_min_gym_badge = (generation) => {
+  const gen = nearest_gen(generation);
+  return [
+    ...gen_gym_badges.get(gen).keys()
+  ][0]
 }
 
 const all_gym_badges = [...gen_gym_badges.values()].reduce(
@@ -58,5 +71,6 @@ const badge_info = {
 export {
   badge_info,
   to_random_badge,
+  to_min_gym_badge,
   to_max_gym_badge
 }

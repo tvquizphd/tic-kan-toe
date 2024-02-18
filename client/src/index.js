@@ -11,7 +11,9 @@ import { toPokemonGrid } from 'grid';
 import { toSearchModal } from 'search';
 import { toTimelineModal } from 'timeline';
 import { 
-  badge_info, to_max_gym_badge, to_random_badge
+  badge_info, to_random_badge,
+  to_min_gym_badge,
+  to_max_gym_badge 
 } from 'badges';
 import { toNav } from 'nav';
 import { toTag } from 'tag';
@@ -139,17 +141,13 @@ const to_saved_state = () => {
 const offer_new_badge = (offer, max_gen) => {
   const badge_offer = offer || (
     to_random_badge(max_gen)
-  )
-  const max_gym_badge = to_max_gym_badge(
-    max_gen
-  )
-  const invalid = (
-    badge_offer > max_gym_badge
   );
-  // Cycle
+  // Badge at or below max gen 
   return 1 + (
     (badge_offer - 1)
-  % max_gym_badge);
+  % to_max_gym_badge(
+    max_gen
+  ));
 }
 
 const update_online = (online, offer) => {
@@ -172,12 +170,9 @@ const verify_online = (online) => {
 }
 
 const create_online = (online, opts) => {
-  const { 
-    max_gen
-  } = opts;
   return verify_online({
-    badge_offer: null, ...online,
-    is_on: false, max_gen,
+    ...online, ...opts,
+    is_on: false
   });
 }
 
@@ -227,25 +222,29 @@ const initialize = async (api_root, details={}) => {
   ].map(() => {
     return null; 
   });
-  // 1) argument, 2) hash, 3) server_meta
+  // Fallback to hash or server metadata 
   const hash_values = read_hash(server_meta);
-  const max_gen = details.max_gen || (
-    hash_values.max_gen
-  );
+  const online_opts = {
+    max_gen: hash_values.max_gen
+  }
+  // Prefer to take values from details
+  const options = ['max_gen', 'badge_offer'];
+  options.forEach((k) => {
+    if (details[k]) online_opts[k] = details[k];
+  });
   const rand = await randomConditions(
-    api_root, max_gen 
+    api_root, online_opts.max_gen 
   );
   const cols = [0,1,2].map(i => rand[i]);
   const rows = [3,4,5].map(i => rand[i]);
-  forget(MEMORY);
   // Prevent choices from being selected next time
   const conditions = rows.reduce((x,r) => {
     return cols.reduce((y,c) => ([...y, [r,c]]), x);
   }, []);
+  forget(MEMORY);
   const online = create_online(
-    saved.online || {}, {
-      max_gen 
-  });
+    (saved.online || {}), online_opts
+  );
   const memory = {
     online, failures: [], tries: 0,
     pokemon, rows, cols,
@@ -287,6 +286,12 @@ const main = async () => {
     matches: no_matches,
     github_root: github_root,
     resetRevive: async (_max_gen=null) => {
+      const badge = data.online.badge_offer;
+      // Find a new badge within the new gen
+      const reset_badge = _max_gen && (
+        to_max_gym_badge(_max_gen) < badge
+        || badge < to_min_gym_badge(_max_gen)
+      );
       if (_max_gen) {
         data.online.max_gen = _max_gen;
       }
@@ -295,7 +300,10 @@ const main = async () => {
         online, failures,
         tries, pokemon, rows, cols
       } = await initialize(api_root, {
-        max_gen: data.online.max_gen
+        max_gen: data.online.max_gen,
+        badge_offer: reset_badge ? (
+          to_random_badge(_max_gen)
+        ) : null
       });
       data.err = has_failed(failures, tries);
       data.failures = failures;
