@@ -50,15 +50,15 @@ const toPokemonGrid = (data, globalCSS) => {
 
     static get setup() {
       return {
-        cols: JSON.parse(data.cols),
-        rows: JSON.parse(data.rows),
-        pokemon: JSON.parse(data.pokemon)
+        cols: JSON.stringify(data.cols),
+        rows: JSON.stringify(data.rows),
+        pokemon: JSON.stringify(data.pokemon)
       };
     }
 
     get root() {
       const mons = [0,1,2,3,4,5,6,7,8].map((i) => {
-        return () => this.data.pokemon[i];
+        return () => data.pokemon[i];
       });
       const squares = mons.map((to_mon, i) => () => {
         const no_mon = () => to_mon() == null;
@@ -115,7 +115,7 @@ const toPokemonGrid = (data, globalCSS) => {
         });
       });
 
-      const items = [...addHeaders(squares, this.data)];
+      const items = [...addHeaders(squares, data)];
 
       return toTag('div')`${items}`({
         'class': 'pokemon-grid centered'
@@ -137,9 +137,9 @@ const toPokemonGrid = (data, globalCSS) => {
   }
 
   return toTag('pokemon-grid', PokemonGrid)``({
-    pokemon: () => data.pokemon,
-    rows: () => data.rows,
-    cols: () => data.cols,
+    pokemon: () => JSON.stringify(data.pokemon),
+    rows: () => JSON.stringify(data.rows),
+    cols: () => JSON.stringify(data.cols),
     class: 'grid-row2'
   });
 }

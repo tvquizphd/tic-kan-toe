@@ -46,9 +46,8 @@ const toBackdrop = (data) => {
     }
   }
   return toTag('backdrop', Backdrop)``({
-    data,
-    width: d => d.width,
-    height: d => d.height,
+    width: () => data.width,
+    height: () => data.height,
     class: 'backdrop'
   });
 }

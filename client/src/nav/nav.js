@@ -28,7 +28,7 @@ const toNav = (data) => {
     static get setup() {
       return {
         tries: 0, text: '', err: data.err,
-        max_gen: data.max_gen
+        max_gen: data.online.max_gen
       };
     }
 
@@ -168,7 +168,7 @@ const toNav = (data) => {
     class: 'content',
     err: () => data.err,
     tries: () => data.tries,
-    max_gen: () => data.max_gen,
+    max_gen: () => data.online.max_gen,
     text: () => {
       return [
         'Tic Kan Toe',

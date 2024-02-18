@@ -1,15 +1,26 @@
 div.menu {
   height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto;
   background: var(--solid-main-background);
-  & > div.main-row {
-    grid-template-columns: auto 1fr auto;
+  & > div {
     justify-items: center;
     align-items: center;
     display: grid;
+  }
+  & > div.main-row {
+    grid-template-columns: auto 1fr auto;
     & > div.menu.icon {
       & > img {
         filter: var(--chosen-drop-shadow);
       }
+    }
+  }
+  & > div.minor-row {
+    grid-template-columns: 1fr auto;
+    & > div.badge.icon {
+      overflow: hidden;
+      margin: var(--the-padding);
     }
   }
 

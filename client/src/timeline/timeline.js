@@ -8,7 +8,7 @@ const toTimelineModal = (data, actions) => {
 
     static get setup() {
       return {
-        max_gen: data.max_gen,
+        max_gen: data.online.max_gen,
       };
     }
 
@@ -87,7 +87,7 @@ const toTimelineModal = (data, actions) => {
   }
 
   return toTag('timeline', TimelineModal)``({
-    max_gen: () => data.max_gen,
+    max_gen: () => data.online.max_gen,
     class: 'parent modal'
   });
 

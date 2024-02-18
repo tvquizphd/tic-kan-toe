@@ -35,3 +35,15 @@ pip install pypokedex==1
 ```
 python test.py
 ```
+
+### Scripts
+
+```
+pip install imageio==2.34.0
+```
+
+Generate "n" badges, `n=58` now matches "client/src/lib.badges.js". This should be re-run when "scripts/badges/" updated. The current list of badge images is given by [this GitHub repository commit](https://github.com/PokeAPI/sprites/tree/2a6a6b66983a97a6bdc889b9e0a2a42a25e2522e/sprites/badges).
+
+```
+python scripts/combine_badges.py 58 scripts/badges/ client/data/
+```

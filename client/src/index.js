@@ -10,10 +10,19 @@ import { toBackdrop } from 'backdrop';
 import { toPokemonGrid } from 'grid';
 import { toSearchModal } from 'search';
 import { toTimelineModal } from 'timeline';
+import { 
+  badge_info, to_max_gym_badge, to_random_badge
+} from 'badges';
 import { toNav } from 'nav';
 import { toTag } from 'tag';
 
 const phase_list = [...Array(nPhases).keys()];
+
+const HISTORY = 'conditions'
+const MEMORY = [
+  'online', 'failures', 'tries',
+  'pokemon', 'rows', 'cols'
+]
 
 // Choose 6 random types
 const randomConditions = async (api_root, max_gen=null) => {
@@ -23,8 +32,9 @@ const randomConditions = async (api_root, max_gen=null) => {
   const grid_pairs = grid_combos.concat(
     grid_combos.map(c => [...c].reverse())
   );
+  const banned_k = `tkt-saved-${HISTORY}`;
   const banned = JSON.parse(
-    localStorage['tkt-saved-conditions'] || "[]"
+    localStorage[banned_k] || "[]"
   ).map(xy => new Set(xy))
   const is_pair_found = (pair, list) => {
     // Pair matches some x in the list
@@ -85,30 +95,90 @@ const randomConditions = async (api_root, max_gen=null) => {
   ]
 }
 
-const remember = (new_pokemon, failures, max_gen, tries) => {
-  // Prevent choices from being selected next time
-  localStorage.setItem("tkt-saved-tries", `${tries}`);
-  localStorage.setItem("tkt-saved-max_gen", `${max_gen}`);
-  localStorage.setItem("tkt-saved-failures", JSON.stringify(
-    failures
-  ));
-  localStorage.setItem("tkt-saved-pokemon", JSON.stringify(
-    new_pokemon
-  ));
+const forget = (memory) => {
+  memory.forEach(label => {
+    const k = `tkt-saved-${label}`;
+    return localStorage.removeItem(k);
+  });
 }
 
-const has_saved_state = () => {
-  const found = [
-    'failures', 'max_gen', 'tries', 'pokemon', 'rows', 'cols'
-  ].map(k => {
-    return localStorage.getItem(`tkt-saved-${k}`);
+const remember = (opts) => {
+  const no_json = ['tries'];
+  MEMORY.forEach(label => {
+    const val = opts[label];
+    if (!val) return;
+    const k = `tkt-saved-${label}`;
+    if (no_json.includes(label)) {
+      return localStorage.setItem(k, `${val}`);
+    }
+    localStorage.setItem(k, JSON.stringify(val));
   });
-  const [failures, max_gen, tries, pokemon, rows, cols] = found;
+}
+
+const to_saved_state = () => {
+  const found = MEMORY.map(label => {
+    const k = `tkt-saved-${label}`
+    return localStorage.getItem(k);
+  });
+  const [
+    online, failures, tries,
+    pokemon, rows, cols
+  ] = found;
   const saved = found.every(x => x !== null);
-  return [
-    saved, JSON.parse(failures), parseInt(max_gen || 1),
-    parseInt(tries || 0), pokemon, rows, cols
-  ];
+  return {
+    saved,
+    tries: parseInt(tries || 0),
+    failures: JSON.parse(failures), 
+    pokemon: JSON.parse(pokemon),
+    online: JSON.parse(online),
+    rows: JSON.parse(rows),
+    cols: JSON.parse(cols)
+  };
+}
+
+const offer_new_badge = (offer, max_gen) => {
+  const badge_offer = offer || (
+    to_random_badge(max_gen)
+  )
+  const max_gym_badge = to_max_gym_badge(
+    max_gen
+  )
+  const invalid = (
+    badge_offer > max_gym_badge
+  );
+  // Cycle
+  return 1 + (
+    (badge_offer - 1)
+  % max_gym_badge);
+}
+
+const update_online = (online, offer) => {
+  const badge_offer = offer_new_badge(
+    offer, online.max_gen
+  );
+  const new_online = {
+    ...online, badge_offer 
+  }
+  // Save to URL and Cache
+  write_hash(new_online.max_gen);
+  remember({ online: new_online });
+  return new_online; 
+}
+
+const verify_online = (online) => {
+  return update_online(
+    online, online.badge_offer
+  );
+}
+
+const create_online = (online, opts) => {
+  const { 
+    max_gen
+  } = opts;
+  return verify_online({
+    badge_offer: null, ...online,
+    is_on: false, max_gen,
+  });
 }
 
 const has_failed = (failures, tries) => {
@@ -123,80 +193,85 @@ const read_hash = (server_meta) => {
   }
 }
 
-const write_hash = (max_gen) => {
-  window.location.hash = `${max_gen}/`;
+const write_hash = (...args) => {
+  window.location.hash = args.join('/');
 }
 
 const initialize = async (api_root, details={}) => {
 
-  const saved = has_saved_state();
+  const saved = to_saved_state();
   const wiki = 'query.wikidata.org';
   const num_details = Object.keys(details).length;
   const server_meta = await getLatestMetadata(
     api_root, wiki
   );
   const { gen_years } = server_meta;
-  if (saved[0] && num_details == 0) {
-    const saved_state = saved.slice(1);
-    const [
-      failures, max_gen, tries, pokemon, rows, cols
-    ] = saved_state;
-    write_hash(max_gen);
-    return { 
-      tries, pokemon, rows, cols, max_gen, gen_years,
-      failures
+  if (saved.saved && num_details == 0) {
+    const {
+      failures,
+      tries, pokemon, rows, cols
+    } = saved;
+    const online = verify_online(
+      saved.online
+    );
+    const memory = { 
+      gen_years,
+      online, failures,
+      tries, pokemon, rows, cols
     };
+    remember(memory);
+    return memory;
   }
-  const pokemon = JSON.stringify([
+  const pokemon = [
     0,1,2,3,4,5,6,7,8
   ].map(() => {
     return null; 
-  }));
-
+  });
   // 1) argument, 2) hash, 3) server_meta
+  const hash_values = read_hash(server_meta);
   const max_gen = details.max_gen || (
-    read_hash(server_meta).max_gen
+    hash_values.max_gen
   );
   const rand = await randomConditions(
     api_root, max_gen 
   );
-  const col_list = [0,1,2].map(i => rand[i]);
-  const row_list = [3,4,5].map(i => rand[i]);
-  const cols = JSON.stringify(col_list);
-  const rows = JSON.stringify(row_list);
-
+  const cols = [0,1,2].map(i => rand[i]);
+  const rows = [3,4,5].map(i => rand[i]);
+  forget(MEMORY);
   // Prevent choices from being selected next time
-  localStorage.removeItem("tkt-saved-tries");
-  localStorage.removeItem("tkt-saved-max_gen");
-  localStorage.removeItem("tkt-saved-failures");
-  localStorage.removeItem("tkt-saved-pokemon");
-  localStorage.setItem("tkt-saved-rows", rows);
-  localStorage.setItem("tkt-saved-cols", cols);
-  localStorage.setItem("tkt-saved-conditions", JSON.stringify(
-    row_list.reduce((x,r) => {
-      return col_list.reduce((y,c) => ([...y, [r,c]]), x);
-    }, [])
-  ));
-  write_hash(max_gen);
-  return {
-    tries: 0, pokemon, rows, cols, max_gen, gen_years,
-    failures: []
-  };
+  const conditions = rows.reduce((x,r) => {
+    return cols.reduce((y,c) => ([...y, [r,c]]), x);
+  }, []);
+  const online = create_online(
+    saved.online || {}, {
+      max_gen 
+  });
+  const memory = {
+    online, failures: [], tries: 0,
+    pokemon, rows, cols,
+    gen_years,
+  }
+  // Remember new initialization
+  remember(memory);
+  return memory;
 }
 
 const main = async () => {
   
   const host = window.location.hostname;
   const api_root = `http://${host}:3135`;
-  const no_matches = JSON.stringify([]);
+  const no_matches = [];
   const {
-    tries, rows, cols, pokemon,
-    max_gen, gen_years, failures 
+    gen_years,
+    online, failures,
+    tries, pokemon, rows, cols
   } = await initialize(api_root);
+  // Remember new initialization
+  remember({
+    online, failures, tries,
+    pokemon, rows, cols
+  });
   const github_root = 'https://raw.githubusercontent.com/PokeAPI/sprites/master';
-  const online = {
-    is_on: false
-  };
   const data = reactive({
     online,
     phaseMap,
@@ -204,24 +279,28 @@ const main = async () => {
     modal: null,
     content: '',
     cols, rows,
+    gen_years,
     failures: failures,
-    gen_years, max_gen,
     phase: 0, active_square: 0,
     err: has_failed(failures, tries),
     pokemon: pokemon,
     matches: no_matches,
     github_root: github_root,
     resetRevive: async (_max_gen=null) => {
-      if (_max_gen) data.max_gen = _max_gen;
+      if (_max_gen) {
+        data.online.max_gen = _max_gen;
+      }
       const {
-        tries, rows, cols, pokemon,
-        max_gen, gen_years, failures
+        gen_years,
+        online, failures,
+        tries, pokemon, rows, cols
       } = await initialize(api_root, {
-        max_gen: data.max_gen
+        max_gen: data.online.max_gen
       });
-      data.err = has_failed(failures, tries),
+      data.err = has_failed(failures, tries);
       data.failures = failures;
       data.pokemon = pokemon;
+      data.online = online;
       data.tries = tries;
       data.rows = rows;
       data.cols = cols;
@@ -233,27 +312,45 @@ const main = async () => {
       const repo = 'https://raw.githubusercontent.com/PokeAPI/sprites';
       return `${repo}/master/sprites/pokemon/other/official-artwork//${id}.png`;
     },
+    offerNewBadge: (badge_diff) => {
+      const offer = (
+        data.online.badge_offer + badge_diff
+      );
+      data.online = update_online(
+        data.online, offer
+      );
+    },
     toMatches: async (guess, max_gen) => {
       const root = data.api_root;
       const matches = getMatches(root, guess, max_gen);
       return await matches;
     },
-    testGuess: async (id) => {
+    testGuess: async (mon) => {
       const col = data.active_square % 3; 
       const row = Math.floor(data.active_square / 3);
       const conditions = [
-        JSON.parse(data.cols)[col], JSON.parse(data.rows)[row]
+        data.cols[col], data.rows[row]
       ];
       // Show failure status
       if (data.tries < 9) data.tries += 1;
       const passed = await testGuess(
-        data.api_root, id, conditions
+        data.api_root, mon.id, conditions
       );
       if (!passed) {
         data.failures.push(data.tries);
       }
       if (has_failed(data.failures, data.tries)) {
         data.err = 1;
+      }
+      if (passed) {
+        data.pokemon = data.selectPokemon(
+          data.pokemon, mon
+        );
+      }
+      else {
+        data.selectPokemon(
+          data.pokemon
+        );
       }
       return passed;
     },
@@ -263,7 +360,9 @@ const main = async () => {
         if (i != data.active_square) return mon;
         return new_mon;
       });
-      remember(new_pokemon, data.failures, data.max_gen, data.tries);
+      remember({
+        ...data, pokemon: new_pokemon
+      });
       return new_pokemon;
     },
     api_root: api_root,

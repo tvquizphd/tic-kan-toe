@@ -76,16 +76,15 @@ const toSearchModal = (data, actions) => {
 
     static get setup() {
       return {
-        pokemon: JSON.parse(data.pokemon),
-        matches: JSON.parse(data.matches),
+        matches: JSON.stringify(data.matches),
+        max_gen: data.online.max_gen,
         updating_search: false,
-        max_gen: data.max_gen,
         search: '',
       };
     }
 
     get mons() {
-      return [...this.data.matches].reduce((forms, p) => {
+      return [...data.matches].reduce((forms, p) => {
         if (searchQueue.needs('forms', p.dex)) {
           // Queue fetch for this form
           searchQueue.latest = {
@@ -116,19 +115,7 @@ const toSearchModal = (data, actions) => {
           class: 'accept',
           '@click': async () => {
             this.data.search = '';
-            const ok = await data.testGuess(mon.id);
-            if (ok) {
-              data.pokemon = JSON.stringify(
-                data.selectPokemon(
-                  this.data.pokemon, mon
-                )
-              );
-            }
-            else {
-              data.selectPokemon(
-                this.data.pokemon
-              );
-            }
+            await data.testGuess(mon);
             data.closeModal(); 
           }
         });
@@ -168,9 +155,9 @@ const toSearchModal = (data, actions) => {
           // Recursive update function
           const update_matches = () => {
             const guess = this.data.search;
-            const max_gen = this.data.max_gen;
+            const max_gen = data.online.max_gen;
             data.toMatches(guess, max_gen).then((new_matches) => {
-              data.matches = JSON.stringify(new_matches);
+              data.matches = new_matches;
               const need_refresh = this.data.search != guess;
               this.data.updating_search = need_refresh;
               if (need_refresh) {
@@ -219,7 +206,7 @@ const toSearchModal = (data, actions) => {
         // Request all regional forms for the pokemon
         const forms = await getForms(data.api_root, dexn);
         searchQueue.cache('forms', dexn, forms);
-        this.data.matches = this.data.matches.map((p) => {
+        data.matches = data.matches.map((p) => {
           if (p.dex == dexn) {
             p.forms = forms;
           }
@@ -239,9 +226,8 @@ const toSearchModal = (data, actions) => {
   }
 
   return toTag('search', SearchModal)``({
-    pokemon: () => data.pokemon,
-    matches: () => data.matches,
-    max_gen: () => data.max_gen,
+    matches: () => JSON.stringify(data.matches),
+    max_gen: () => data.online.max_gen,
     class: 'parent modal',
     search: '',
   });

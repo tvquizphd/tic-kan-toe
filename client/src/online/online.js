@@ -1,5 +1,6 @@
 import onlineCSS from 'online-css' assert { type: 'css' };
 import globalCSS from 'global-css' assert { type: 'css' };
+import { badge_info } from 'badges';
 import { toTag, CustomTag } from 'tag';
 
 const toOnlineMenu = (data, actions) => {
@@ -8,7 +9,7 @@ const toOnlineMenu = (data, actions) => {
 
     static get setup() {
       return {
-        online: data.online
+        online: JSON.stringify(data.online)
       };
     }
 
@@ -18,7 +19,7 @@ const toOnlineMenu = (data, actions) => {
       </img>`({
           class: 'menu icon',
           '@click': () => {
-            data.resetRevive();
+            data.online.is_on = false;
           }
       });
       const reset = toTag('div')``();
@@ -30,15 +31,52 @@ const toOnlineMenu = (data, actions) => {
       `({
         class: 'main-row'
       });
-      return toTag('div')`${main_row}`({
+      const badge_style = () => {
+        const { 
+          badge_offer
+        } = data.online;
+        const offset = Math.max(
+          50 * (badge_offer-1), 0
+        );
+        const badge_png = 'data/badges.png';
+        return `
+          width: 50px;
+          height: 50px;
+          background-size: 50px;
+          background-position: center -${offset}px;
+          background-image: url("${badge_png}");
+        `;
+      }
+      const badges = toTag('div')``({
+        style: badge_style,
+        class: 'badge icon',
+        '@click': () => {
+          data.offerNewBadge(+1);
+        }
+      });
+      const badge_name = () => {
+        const { all_gym_badges } = badge_info;
+        const { badge_offer } = data.online;
+        const s = all_gym_badges.get(
+          badge_offer
+        );
+        if (!s) return ''
+        return (
+          s[0].toUpperCase() + s.slice(1) + ' badge'
+        );
+      }
+      const badge_label = toTag('div')`${badge_name}`();
+      const minor_row = toTag('div')`
+        ${badge_label}${badges}
+      `({
+        class: 'minor-row'
+      });
+      return toTag('div')`${main_row}${minor_row}`({
         class: () => {
-          if (this.data.online.is_on) {
+          if (data.online.is_on) {
             return 'shown menu wrapper';
           }
           return 'hidden menu wrapper';
-        },
-        '@click': () => {
-          data.online.is_on = false;
         }
       });
     }
@@ -58,7 +96,7 @@ const toOnlineMenu = (data, actions) => {
   }
 
   return toTag('online', OnlineMenu)``({
-    is_on: () => JSON.stringify(data.online),
+    online: () => JSON.stringify(data.online),
     class: 'parent menu'
   });
 
