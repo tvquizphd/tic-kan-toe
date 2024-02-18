@@ -150,6 +150,12 @@ const offer_new_badge = (offer, max_gen) => {
   ));
 }
 
+const to_ws_message = (online) => {
+  return JSON.stringify({
+    ...online
+  })
+}
+
 const update_online = (online, offer) => {
   const badge_offer = offer_new_badge(
     offer, online.max_gen
@@ -255,10 +261,10 @@ const initialize = async (api_root, details={}) => {
   return memory;
 }
 
-const main = async () => {
-  
+const main = async (api_port) => {
   const host = window.location.hostname;
-  const api_root = `http://${host}:3135`;
+  const api_root = `https://${host}:${api_port}`;
+  const ws_url = `wss://${host}:${api_port}/ws`;
   const no_matches = [];
   const {
     gen_years,
@@ -271,6 +277,7 @@ const main = async () => {
     pokemon, rows, cols
   });
   const github_root = 'https://raw.githubusercontent.com/PokeAPI/sprites/master';
+  const ws = new WebSocket(ws_url);
   const data = reactive({
     online,
     phaseMap,
@@ -326,6 +333,9 @@ const main = async () => {
       data.online = update_online(
         data.online, offer
       );
+      ws.send(to_ws_message(
+        data.online
+      ));
     },
     toMatches: async (guess, max_gen) => {
       const root = data.api_root;
@@ -384,6 +394,13 @@ const main = async () => {
       return [ /* Phases to skip */ ].some(x => x);
     }
   });
+  ws.onclose = () => {
+    alert('bye');
+  }
+  ws.onmessage = (event) => {
+    const partner = JSON.parse(event.data);
+    console.log(partner);
+  }
   window.addEventListener('resize', handleResize(data));
   document.adoptedStyleSheets = [
     globalCSS, backdropCSS

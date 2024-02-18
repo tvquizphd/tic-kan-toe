@@ -1,5 +1,7 @@
+*.pem
 env.json
 .DS_Store
+tic-kan-toe
 api/state/*.json
 mockup/state/*.json
 __pycache__/

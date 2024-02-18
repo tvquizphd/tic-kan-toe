@@ -1,19 +1,34 @@
+from starlette.websockets import WebSocketDisconnect
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY as _422
 from starlette.status import HTTP_201_CREATED as _201
 from fastapi.exceptions import RequestValidationError
+from websockets.exceptions import ConnectionClosed
 from fastapi.middleware.cors import CORSMiddleware
 from concurrent.futures import ThreadPoolExecutor
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, WebSocket
+from contextlib import asynccontextmanager
 from util.models import HasPokemon
 from api.service import to_service
+from util import to_multiplayer
 from util import to_config
 import asyncio
 import json
 
+@asynccontextmanager
+async def lifespan(
+    app: FastAPI
+):
+    # Initialize Multiplayer
+    multiplayer = to_multiplayer()
+    # Any startup costs before yield
+    yield
+    print('API Server Shutdown Complete')
+    # Any shutdown costs after yield
+
 # Construct API
-pd_api = FastAPI()
+pd_api = FastAPI(lifespan=lifespan)
 pd_api.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -38,6 +53,29 @@ TODO: Documentation for Development
 @pd_api.get("/api")
 def open_root_api(config=Depends(to_config)):
     return { **vars(config) }
+
+
+# Multiplayer support
+
+@pd_api.websocket("/ws")
+async def websocket_endpoint(
+        user: WebSocket,
+        multiplayer=Depends(to_multiplayer)
+    ):
+    await multiplayer.connect(user)
+    print(multiplayer.users) # TODO
+    while multiplayer.running(user): 
+        try:
+            data = await user.receive_text()
+            await multiplayer.send_text(data)
+        except WebSocketDisconnect:
+            print("Disconnected from WebSocket")
+            await multiplayer.disconnect(user)
+            break
+        except asyncio.CancelledError:
+            print("Cancelling WebSocket")
+            await multiplayer.disconnect(user)
+            break
 
 '''
 Constants

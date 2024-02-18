@@ -91,6 +91,9 @@
   </script>
   <script type="module-shim">
     import main from 'index';
-    main();
+    const api_port = 1 + parseInt(
+      location.port
+    );
+    main(api_port);
   </script>
 </body>
