@@ -76,8 +76,13 @@ const toPokemonGrid = (data, globalCSS) => {
           if (pokemon) {
             return pokemon;
           }
-          const egg_style= () => {
+          const egg_style = () => {
+            if (data.online.is_on) {
+              return ''; // No rest if online 
+            }
             return `background-image: url(${data.github_root}/sprites/items/mystery-egg.png)`;
+          }
+          const egg_class = () => {
           }
           return toTag('div')``({
               style: egg_style,

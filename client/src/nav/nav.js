@@ -27,7 +27,9 @@ const toNav = (data) => {
 
     static get setup() {
       return {
-        tries: 0, text: '', err: data.err,
+        tries: data.tries,
+        max_tries: data.max_tries,
+        text: '', err: data.err,
         max_gen: data.online.max_gen
       };
     }
@@ -97,7 +99,7 @@ const toNav = (data) => {
       </img>`({
           class: 'menu icon',
           '@click': () => {
-            data.online.is_on = true;
+            data.ws_ping(true, 'hosting')
           }
       });
       const nav = toTag('div')`
@@ -127,14 +129,43 @@ const toNav = (data) => {
           });
           return toTag('div')`${blur_button}${num_button}`();
         }
-        const odds = () => [1,3,5,7,9].map(to_indicator);
-        const evens = () => [2,4,6,8].map(to_indicator);
-        return  [
-          toTag('div')`${odds()}`({
-            class: 'back'
-          }), toTag('div')`${evens()}`({
-            class: 'front'
+        const all_n = () => {
+          return [
+            ...Array(data.max_tries+1).keys()
+          ].slice(1)
+        };
+        const evens = () => {
+          const even_n = () => all_n().filter(n => n % 2 == 0);
+          const evens = () => even_n().map(to_indicator);
+          const front_style = () => {
+            const n = all_n().length;
+            return {
+              5: 'width: 180px',
+              9: 'width: 300px'
+            }[n] || '';
+          }
+          return toTag('div')`${evens}`({
+            class: 'front',
+            style: front_style
           })
+        }
+        const odds = () => {
+          const odd_n = () => all_n().filter(n => n % 2 == 1);
+          const odds = () => odd_n().map(to_indicator);
+          const back_style = () => {
+            const n = all_n().length;
+            return {
+              5: 'width: 280px',
+              9: 'width: 300px'
+            }[n] || '';
+          }
+          return toTag('div')`${odds}`({
+            class: 'back',
+            style: back_style
+          })
+        }
+        return  [
+          odds, evens
         ];
       })();
       const buttons = toTag('div')`${_indicator}`({
@@ -177,6 +208,7 @@ const toNav = (data) => {
     class: 'content',
     err: () => data.err,
     tries: () => data.tries,
+    max_tries: () => data.max_tries,
     max_gen: () => data.online.max_gen,
     text: () => {
       return [

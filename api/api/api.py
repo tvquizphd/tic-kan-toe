@@ -60,31 +60,31 @@ def open_root_api(config=Depends(to_config)):
 
 @pd_api.websocket("/ws")
 async def websocket_endpoint(
-        user: WebSocket,
+        client: WebSocket,
         multiplayer=Depends(to_multiplayer)
     ):
-    await multiplayer.connect(user)
+    await multiplayer.connect(client)
     def n_now():
-        return f'Now {len(multiplayer.users)} users'
+        return f'Now {len(multiplayer.clients)} users'
     print(f'Opened socket. {n_now()}') 
     while True: 
         try:
             broadcast = await multiplayer.use_message(
-                user
+                client
             )
             await multiplayer.send_message(
                 broadcast
             )
         except WebSocketDisconnect:
-            multiplayer.untrack_user(user)
+            multiplayer.untrack_client(client)
             print(f"Disconnected. {n_now()}")
             break
         except ConnectionClosed:
-            multiplayer.untrack_user(user)
+            multiplayer.untrack_client(client)
             print(f"Closed Connection. {n_now()}")
             break
         except asyncio.CancelledError:
-            multiplayer.untrack_user(user)
+            multiplayer.untrack_client(client)
             print(f"Cancelled Error. {n_now()}")
             break
 

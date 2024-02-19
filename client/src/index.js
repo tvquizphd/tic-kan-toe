@@ -227,7 +227,9 @@ const initialize = async (api_root, ws_send, details={}) => {
       tries, pokemon, rows, cols
     } = saved;
     const online = verify_online(
-      saved.online, ws_send
+      {
+        ...saved.online, is_on: false,
+      }, ws_send
     );
     const memory = { 
       gen_years,
@@ -250,7 +252,8 @@ const initialize = async (api_root, ws_send, details={}) => {
   // Prefer to take values from details
   const options = ['max_gen', 'badge_offer'];
   options.forEach((k) => {
-    if (details[k]) online_opts[k] = details[k];
+    if (!details[k]) return;
+    online_opts[k] = details[k];
   });
   const rand = await randomConditions(
     api_root, online_opts.max_gen 
@@ -297,18 +300,21 @@ const main = async (api_port) => {
     online,
     phaseMap,
     tries: tries,
-    max_tries: 9,
     modal: null,
     content: '',
     cols, rows,
     gen_years,
     failures: failures,
     phase: 0, active_square: 0,
+    max_tries: 9,
     err: has_failed(failures, tries, 9),
     pokemon: pokemon,
     matches: no_matches,
     github_root: github_root,
-    ws_state: 'hosting',
+    ws_state: 'quitter',
+    set_max_tries: (is_on) => {
+      data.max_tries = [9, 5][+is_on];
+    },
     ws_ping: (is_on, ws_state) => {
       // Reopen the websocket
       if (ws.readyState === WebSocket.CLOSED) {
@@ -319,6 +325,7 @@ const main = async (api_port) => {
         data.online.is_on != is_on
       ].some(x => x)
       data.online.is_on = is_on;
+      data.set_max_tries(is_on); 
       data.ws_state = ws_state;
       if (updated) {
         remember(data, data.ws_send);
@@ -340,9 +347,8 @@ const main = async (api_port) => {
       const rows = opts.rows || data.rows;
       const cols = opts.cols || data.cols;
       /* TODO
-       * opts.failures
-       * opts.tries
-      */
+       * opts.failures / opts.tries
+       */
       return to_ws_message(
         online, data.ws_state, {
           contents, action, rows, cols
@@ -350,6 +356,9 @@ const main = async (api_port) => {
       )
     },
     resetRevive: async (_max_gen=null) => {
+      if (data.ws_state == 'found') {
+        return; // No resetting in battle
+      }
       const badge = data.online.badge_offer;
       // Find a new badge within the new gen
       const reset_badge = _max_gen && (
@@ -458,25 +467,34 @@ const main = async (api_port) => {
   ws.onmessage = (event) => {
     if (!data.online.is_on) return;
     const updates = JSON.parse(event.data);
-    /* TODO
-     * opts.failures
-     * opts.tries
-    */
     const {
       group_ids, max_gen, badge_offer, ws_state
     } = updates;
     if (!group_ids.includes(data.online.user_id)) {
       return;
     }
-    console.log('In group', group_ids);
+    // Mimic Server side logs
+    const group_str = group_ids.map(v => `'${v}'`).join(', ');
+    console.log(`From: (${group_str}) ${ws_state}`);
     const {
       contents, rows, cols
     } = updates.grid_state;
+    /* TODO does this make sense?
+     * failures, tries
+     */
+    if (ws_state == 'found' && data.ws_state != 'found') {
+      data.tries = contents.reduce((sum, v) => {
+        return sum + +(v != null);
+      }, 0)
+      data.failures = []
+    }
     // Update and cache data
     data.online = verify_online({
-      ...data.online, max_gen, badge_offer
+      ...data.online, max_gen, badge_offer,
+      user_id: data.online.user_id
     }, no_send);
-    data.is_on = updates.is_on
+    data.online.is_on = updates.is_on
+    data.set_max_tries(updates.is_on); 
     data.ws_state = ws_state;
     data.pokemon = contents;
     data.rows = rows;

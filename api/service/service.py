@@ -173,6 +173,8 @@ class Service():
             types + regions + conditions
         )
         ok = all([fn(s,valid) for (s,fn) in fns])
+        if ok:
+            print(f'{pkmn["name"]}:', ','.join(valid))
         return { 'ok': ok }
 
     def parse_forms(self, pkmn):
@@ -257,8 +259,6 @@ class Service():
             out.append(pkmn)
         
         end_request = time.time()
-
-        print(f'"{guess}": found {len(out)} options')
         return [format_pkmn(p) for p in out]
 
 

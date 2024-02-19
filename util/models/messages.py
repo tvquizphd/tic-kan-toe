@@ -8,6 +8,7 @@ class MessageState(str, Enum):
     battle = 'found'
     leader = 'hosting'
     trainer = 'finding'
+    quitter = 'leaving'
 
 class ActionContent(BaseModel):
     generation: int

@@ -38,9 +38,11 @@ const toOnlineMenu = (data, actions) => {
     }
 
     get root() {
-      const disconnect = (close) => {
-        data.ws_ping(this.is_on, 'hosting');
-        this.is_on = !close;
+      const broadcast = (ws_state) => {
+        data.ws_ping(this.is_on, ws_state);
+      }
+      const disconnect = (ws_state) => {
+        data.ws_ping(false, ws_state);
       }
       const menu_class = () => {
         return 'menu icon' + ['', ' found'][+this.found];
@@ -50,7 +52,7 @@ const toOnlineMenu = (data, actions) => {
       </img>`({
           class: menu_class,
           '@click': () => {
-            disconnect(true);
+            disconnect('hosting');
           }
       });
       const reset = toTag('div')``();
@@ -79,7 +81,8 @@ const toOnlineMenu = (data, actions) => {
         class: action_class,
         '@click': () => {
           if (this.found) {
-            return disconnect(false);
+            broadcast('leaving');
+            return;
           }
           if (this.finding) return;
           data.ws_ping(this.is_on, 'finding');
@@ -134,7 +137,7 @@ const toOnlineMenu = (data, actions) => {
         '@click': () => {
           const { finding, found } = this;
           if (found) return;
-          disconnect(false);
+          broadcast('hosting');
           const nearest_badge = 1 + Math.floor(
             (this.data.badge_y + 25) / 50
           );
@@ -147,7 +150,7 @@ const toOnlineMenu = (data, actions) => {
           return toTag('div')`cancel`({
             class: 'cancel button',
             '@click': () => {
-              disconnect(false);
+              disconnect('hosting');
             }
           });
         }
