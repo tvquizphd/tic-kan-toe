@@ -314,6 +314,10 @@ const main = async (api_port) => {
     ws_state: 'quitter',
     set_max_tries: (is_on) => {
       data.max_tries = [9, 5][+is_on];
+      data.tries = Math.min(
+        data.max_tries, data.tries
+      );
+      data.failures = [];
     },
     ws_ping: (is_on, ws_state) => {
       // Reopen the websocket
