@@ -49,10 +49,17 @@ def matches_by_max_gen(candidate_key, candidates, item):
         if compare(item.max_gen, v.max_gen):
             yield (k, v)
 
+def del_if(d, k):
+    if k in d: del d[k]
+
 def mutate_memory(memory, item):
     own_id = item.user_id
     own_kind = memory[item.ws_state]
     battles = memory[MessageState.battle]
+    def clear_battles(k1, k2):
+        for bk in list(battles.keys()):
+            if k1 in bk or k2 in bk:
+                del_if(battles, bk)
     candidate_key, candidates = (
         to_candidate_dict(memory, item)
     )
@@ -77,8 +84,7 @@ def mutate_memory(memory, item):
             )
         # Only one battle at once
         for k,_ in matches[1:]:
-            if k in battles:
-                del battles[k]
+            del_if(battles, k)
         k = matches[0][0]
         # Allow client-side validation
         item.group_ids = list(k)
@@ -90,10 +96,13 @@ def mutate_memory(memory, item):
         )
     elif len(matches):
         k, v = matches[0]
-        if k in candidates:
-            del candidates[k]
-        if own_id in own_kind:
-            del own_kind[own_id]
+        # Clear non-battles
+        del_if(own_kind, k)
+        del_if(candidates, k)
+        del_if(own_kind, own_id)
+        del_if(candidates, own_id)
+        # Clear battles
+        clear_battles(k, own_id)
         # Leader is always right!
         battle_id = (
             k if is_leader else own_id,
@@ -115,8 +124,7 @@ def mutate_memory(memory, item):
     # Just update own status
     own_kind[own_id] = item
     # Handle any transitions
-    if own_id in candidates:
-        del candidates[own_id]
+    del_if(candidates, own_id)
     item.is_on = True
     return (
         own_id, item 

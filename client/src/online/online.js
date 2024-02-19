@@ -20,7 +20,7 @@ const toOnlineMenu = (data, actions) => {
     }
 
     set is_on(val) {
-      data.online.is_on = val;
+      data.ws_ping(val, data.ws_state)
     } 
 
     get is_on() {
@@ -39,7 +39,7 @@ const toOnlineMenu = (data, actions) => {
 
     get root() {
       const disconnect = (close) => {
-        data.ws_ping('hosting');
+        data.ws_ping(this.is_on, 'hosting');
         this.is_on = !close;
       }
       const menu_class = () => {
@@ -82,15 +82,19 @@ const toOnlineMenu = (data, actions) => {
             return disconnect(false);
           }
           if (this.finding) return;
-          data.ws_ping('finding');
+          data.ws_ping(this.is_on, 'finding');
           this.draw();
         }
       })
       const header = () => {
         if (this.found) {
+          const gen = this.data.max_gen;
+          const [gen_plural, gen_str] = [
+            ['', ''], ['s', ` - ${gen}`]
+          ][+(gen > 1)];
           return toTag('div')`
             <div>Start Battling!</div> 
-            (gens 1 - ${this.data.max_gen})
+            (gen${gen_plural} 1${gen_str})
           `({
             class: 'found header'
           });
@@ -112,12 +116,15 @@ const toOnlineMenu = (data, actions) => {
       });
       const badge_style = () => {
         const offset = this.data.badge_y;
+        const round_offset = !this.finding ? (
+          Math.round(offset / 50) * 50
+        ) : offset
         const badge_png = 'data/badges.png';
         return `
           width: 50px;
           height: 50px;
           background-size: 50px;
-          background-position: center -${offset}px;
+          background-position: center -${round_offset}px;
           background-image: url("${badge_png}");
         `;
       }

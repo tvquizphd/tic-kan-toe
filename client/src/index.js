@@ -279,7 +279,7 @@ const main = async (api_port) => {
   const host = window.location.hostname;
   const api_root = `https://${host}:${api_port}`;
   const ws_url = `wss://${host}:${api_port}/ws`;
-  const ws = new WebSocket(ws_url);
+  let ws = new WebSocket(ws_url);
   const no_send = () => null;
   const no_matches = [];
   const {
@@ -309,10 +309,18 @@ const main = async (api_port) => {
     matches: no_matches,
     github_root: github_root,
     ws_state: 'hosting',
-    ws_ping: (ws_state) => {
-      if (data.ws_state != ws_state) {
-        console.log(ws_state);
-        data.ws_state = ws_state;
+    ws_ping: (is_on, ws_state) => {
+      // Reopen the websocket
+      if (ws.readyState === WebSocket.CLOSED) {
+        ws = new WebSocket(ws_url);
+      }
+      const updated = [
+        data.ws_state != ws_state,
+        data.online.is_on != is_on
+      ].some(x => x)
+      data.online.is_on = is_on;
+      data.ws_state = ws_state;
+      if (updated) {
         remember(data, data.ws_send);
       };
     },
