@@ -13,8 +13,8 @@ const toOnlineMenu = (data, actions) => {
       this._timer = null;
       return {
         max_gen: data.online.max_gen,
+        ws_state: data.ws_state,
         is_on: false,
-        state: '',
         badge_y: 0
       };
     }
@@ -29,17 +29,17 @@ const toOnlineMenu = (data, actions) => {
 
     get found() {
       if (!this.is_on) return false;
-      return this.data.state == 'found';
+      return data.ws_state == 'found';
     }
 
     get finding() {
       if (!this.is_on) return false;
-      return this.data.state == 'finding';
+      return data.ws_state == 'finding';
     }
 
     get root() {
       const disconnect = (close) => {
-        this.data.state = '';
+        data.ws_ping('hosting');
         this.is_on = !close;
       }
       const menu_class = () => {
@@ -59,11 +59,6 @@ const toOnlineMenu = (data, actions) => {
         if (max_gen == 1) return 'gen 1';
         return `gens 1-${max_gen}`;
       }
-      const action_class = () => {
-        return 'action' + (
-          [' button',''][+this.finding]
-        );
-      }
       const ing = () => {
         return ['', 'ing'][+this.finding];
       }
@@ -71,7 +66,12 @@ const toOnlineMenu = (data, actions) => {
         if (this.found) {
           return 'Disconnect?';
         }
-        return `Search${ing()} gyms`
+        return `Search${ing()} all gyms`
+      }
+      const action_class = () => {
+        return 'cancel action' + (
+          [' button',''][+this.finding]
+        );
       }
       const action = toTag('div')`
         ${action_text}
@@ -82,14 +82,15 @@ const toOnlineMenu = (data, actions) => {
             return disconnect(false);
           }
           if (this.finding) return;
-          this.data.state = 'finding';
+          data.ws_ping('finding');
           this.draw();
         }
       })
       const header = () => {
         if (this.found) {
           return toTag('div')`
-            <div>Found gym!</div> ${action} 
+            <div>Start Battling!</div> 
+            (gens 1 - ${this.data.max_gen})
           `({
             class: 'found header'
           });
@@ -100,8 +101,12 @@ const toOnlineMenu = (data, actions) => {
           class: 'header'
         });
       }
+      const to_menu = () => {
+        if (!this.found) return menu;
+        return '';
+      }
       const main_row = toTag('div')`
-        ${reset}${header}${menu}
+        ${reset}${header}${to_menu}
       `({
         class: 'main-row'
       });
@@ -120,7 +125,8 @@ const toOnlineMenu = (data, actions) => {
         style: badge_style,
         class: 'badge icon button',
         '@click': () => {
-          const { finding } = this;
+          const { finding, found } = this;
+          if (found) return;
           disconnect(false);
           const nearest_badge = 1 + Math.floor(
             (this.data.badge_y + 25) / 50
@@ -129,32 +135,55 @@ const toOnlineMenu = (data, actions) => {
           data.offerNewBadge(nearest_badge+diff);
         }
       });
-      const badge_name = () => {
-        if (this.finding) return '...';
+      const badge_status = () => {
+        if (this.finding) {
+          return toTag('div')`cancel`({
+            class: 'cancel button',
+            '@click': () => {
+              disconnect(false);
+            }
+          });
+        }
         const { all_gym_badges } = badge_info;
         const { badge_offer } = data.online;
         const s = all_gym_badges.get(
           badge_offer
         );
-        if (!s) return ''
-        return (
-          s[0].toUpperCase() + s.slice(1)
-        );
+        const badge_name = () => {
+          return s ? (
+            s[0].toUpperCase() + s.slice(1)
+          ): '';
+        }
+        return toTag('div')`${badge_name}`();
       }
       const whose = () => {
         return ({
-          '': 'Your badge:',
-          'finding': 'Their badge:',
+          'hosting': 'Your badge:',
+          'finding': 'Seeking badges:',
           'found': 'At stake:'
-        })[this.data.state];
+        })[data.ws_state];
+      }
+      const found_label = () => {
+        if (this.found) {
+          return toTag('div')`
+            <div>Found a Gym!</div> ${action} 
+          `({
+            class: 'found label'
+          });
+        }
+        return toTag('div')`
+          <div>No battle</div><div>...yet</div>
+        `({
+          class: 'label'
+        });
       }
       const badge_label = toTag('div')`
-        ${whose}<div>${badge_name}</div>
+        ${whose}${badge_status}
       `({
         class: 'label'
       });
       const minor_row = toTag('div')`
-        <div></div>${badge_label}${badges}
+        ${found_label}<div></div>${badge_label}${badges}
       `({
         class: 'minor-row'
       });
@@ -209,6 +238,7 @@ const toOnlineMenu = (data, actions) => {
         50 * (badge_offer-1), 0
       );
     },
+    ws_state: () => data.ws_state,
     max_gen: () => data.online.max_gen,
     is_on: () => data.online.is_on,
     class: 'parent menu'

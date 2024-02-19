@@ -104,7 +104,7 @@ const forget = (memory) => {
   });
 }
 
-const remember = (opts) => {
+const remember = (opts, ws_send, action=null) => {
   const no_json = ['tries'];
   MEMORY.forEach(label => {
     const val = opts[label];
@@ -115,6 +115,7 @@ const remember = (opts) => {
     }
     localStorage.setItem(k, JSON.stringify(val));
   });
+  ws_send(opts, action);
 }
 
 const to_saved_state = () => {
@@ -150,13 +151,24 @@ const offer_new_badge = (offer, max_gen) => {
   ));
 }
 
-const to_ws_message = (online) => {
-  return JSON.stringify({
-    ...online
-  })
+const to_ws_message = (
+  online, ws_state, opts
+) => {
+  const { cols, rows, contents } = opts;
+  const message = {
+    ...online, ws_state,
+    grid_state: {
+      contents, cols, rows
+    },
+  }
+  if (opts.action) {
+    const { content, position } = opts.action;
+    message.grid_action = { content, position };
+  }
+  return JSON.stringify(message);
 }
 
-const update_online = (online, offer) => {
+const update_online = (online, offer, ws_send) => {
   const badge_offer = offer_new_badge(
     offer, online.max_gen
   );
@@ -165,21 +177,23 @@ const update_online = (online, offer) => {
   }
   // Save to URL and Cache
   write_hash(new_online.max_gen);
-  remember({ online: new_online });
+  remember({ online: new_online }, ws_send);
   return new_online; 
 }
 
-const verify_online = (online) => {
+const verify_online = (online, ws_send) => {
   return update_online(
-    online, online.badge_offer
+    online, online.badge_offer, ws_send
   );
 }
 
-const create_online = (online, opts) => {
+const create_online = (online, opts, ws_send) => {
+  const user_id = crypto.randomUUID();
   return verify_online({
     ...online, ...opts,
-    is_on: false
-  });
+    user_id, is_on: false,
+    group_ids: [ user_id ]
+  }, ws_send);
 }
 
 const has_failed = (failures, tries, max_tries) => {
@@ -198,7 +212,7 @@ const write_hash = (...args) => {
   window.location.hash = args.join('/');
 }
 
-const initialize = async (api_root, details={}) => {
+const initialize = async (api_root, ws_send, details={}) => {
 
   const saved = to_saved_state();
   const wiki = 'query.wikidata.org';
@@ -213,14 +227,14 @@ const initialize = async (api_root, details={}) => {
       tries, pokemon, rows, cols
     } = saved;
     const online = verify_online(
-      saved.online
+      saved.online, ws_send
     );
     const memory = { 
       gen_years,
       online, failures,
       tries, pokemon, rows, cols
     };
-    remember(memory);
+    remember(memory, ws_send);
     return memory;
   }
   const pokemon = [
@@ -249,7 +263,7 @@ const initialize = async (api_root, details={}) => {
   }, []);
   forget(MEMORY);
   const online = create_online(
-    (saved.online || {}), online_opts
+    (saved.online || {}), online_opts, ws_send
   );
   const memory = {
     online, failures: [], tries: 0,
@@ -257,7 +271,7 @@ const initialize = async (api_root, details={}) => {
     gen_years,
   }
   // Remember new initialization
-  remember(memory);
+  remember(memory, ws_send);
   return memory;
 }
 
@@ -265,19 +279,20 @@ const main = async (api_port) => {
   const host = window.location.hostname;
   const api_root = `https://${host}:${api_port}`;
   const ws_url = `wss://${host}:${api_port}/ws`;
+  const ws = new WebSocket(ws_url);
+  const no_send = () => null;
   const no_matches = [];
   const {
     gen_years,
     online, failures,
     tries, pokemon, rows, cols
-  } = await initialize(api_root);
+  } = await initialize(api_root, no_send);
   // Remember new initialization
   remember({
     online, failures, tries,
     pokemon, rows, cols
-  });
+  }, no_send);
   const github_root = 'https://raw.githubusercontent.com/PokeAPI/sprites/master';
-  const ws = new WebSocket(ws_url);
   const data = reactive({
     online,
     phaseMap,
@@ -293,6 +308,39 @@ const main = async (api_port) => {
     pokemon: pokemon,
     matches: no_matches,
     github_root: github_root,
+    ws_state: 'hosting',
+    ws_ping: (ws_state) => {
+      if (data.ws_state != ws_state) {
+        console.log(ws_state);
+        data.ws_state = ws_state;
+        remember(data, data.ws_send);
+      };
+    },
+    ws_send: (opts, action=null) => {
+      if (!data.online.is_on) return;
+      ws.send(data.to_message(
+        opts, action
+      ));
+    },
+    to_message: (opts, action=null) => {
+      const online = {
+        ...data.online, ...(opts.online || {})
+      };
+      const contents = (
+        opts.pokemon || data.pokemon
+      );
+      const rows = opts.rows || data.rows;
+      const cols = opts.cols || data.cols;
+      /* TODO
+       * opts.failures
+       * opts.tries
+      */
+      return to_ws_message(
+        online, data.ws_state, {
+          contents, action, rows, cols
+        }
+      )
+    },
     resetRevive: async (_max_gen=null) => {
       const badge = data.online.badge_offer;
       // Find a new badge within the new gen
@@ -307,7 +355,7 @@ const main = async (api_port) => {
         gen_years,
         online, failures,
         tries, pokemon, rows, cols
-      } = await initialize(api_root, {
+      } = await initialize(api_root, data.ws_send, {
         max_gen: data.online.max_gen,
         badge_offer: reset_badge ? (
           to_random_badge(_max_gen)
@@ -331,11 +379,8 @@ const main = async (api_port) => {
     },
     offerNewBadge: (offer) => {
       data.online = update_online(
-        data.online, offer
+        data.online, offer, data.ws_send
       );
-      ws.send(to_ws_message(
-        data.online
-      ));
     },
     toMatches: async (guess, max_gen) => {
       const root = data.api_root;
@@ -382,9 +427,14 @@ const main = async (api_port) => {
         if (i != data.active_square) return mon;
         return new_mon;
       });
+      const action = new_mon ? ({
+        content: new_mon,
+        position: data.active_square
+      }): null;
+      // Send Action
       remember({
         ...data, pokemon: new_pokemon
-      });
+      }, data.ws_send, action);
       return new_pokemon;
     },
     api_root: api_root,
@@ -395,11 +445,35 @@ const main = async (api_port) => {
     }
   });
   ws.onclose = () => {
-    alert('bye');
+    alert('game briefly unavailable');
   }
   ws.onmessage = (event) => {
-    const partner = JSON.parse(event.data);
-    console.log(partner);
+    if (!data.online.is_on) return;
+    const updates = JSON.parse(event.data);
+    /* TODO
+     * opts.failures
+     * opts.tries
+    */
+    const {
+      group_ids, max_gen, badge_offer, ws_state
+    } = updates;
+    if (!group_ids.includes(data.online.user_id)) {
+      return;
+    }
+    console.log('In group', group_ids);
+    const {
+      contents, rows, cols
+    } = updates.grid_state;
+    // Update and cache data
+    data.online = verify_online({
+      ...data.online, max_gen, badge_offer
+    }, no_send);
+    data.is_on = updates.is_on
+    data.ws_state = ws_state;
+    data.pokemon = contents;
+    data.rows = rows;
+    data.cols = cols;
+    remember(data, no_send);
   }
   window.addEventListener('resize', handleResize(data));
   document.adoptedStyleSheets = [

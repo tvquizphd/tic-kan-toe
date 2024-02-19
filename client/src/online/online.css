@@ -16,12 +16,13 @@ div.menu {
       grid-auto-flow: column;
       justify-items: center;
       align-items: center;
+      & > div.button {
+        filter: var(--chosen-drop-shadow);
+      }
     }
     & > div.header.found {
-      & > div.action.button {
-        filter: var(--error-drop-shadow);
-      }
       & > div:not(.button) {
+        font-size: 1.2em;
         filter: var(--chosen-drop-shadow);
       }
     }
@@ -37,13 +38,18 @@ div.menu {
     }
   }
   & > div.minor-row {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: auto 1fr auto auto;
+    padding: var(--the-padding);
     gap: var(--the-padding);
     & > div.label {
-      line-height: .85;
       display: grid;
+      line-height: 1em;
       text-align: right;
       grid-auto-flow: row;
+      & > div.cancel.button {
+        filter: var(--error-drop-shadow);
+        text-align: center;
+      }
     }
     & > div.badge.icon {
       padding: 0;

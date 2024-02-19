@@ -175,14 +175,17 @@ class Service():
         ok = all([fn(s,valid) for (s,fn) in fns])
         return { 'ok': ok }
 
+    def parse_forms(self, pkmn):
+        varieties = [v['pokemon'] for v in pkmn.get('varieties', [])]
+        max_max = max(self.generations)
+        mon = self.mon_dict[max_max][int(pkmn['id'])]
+        gen = min((mon[2] or {'': -1}).values())
+        return [format_form(v, gen) for v in varieties]
+
     def get_forms(self, dexn):
         root = self.api_url
         pkmn = get_api(root, f'pokemon-species/{dexn}/', True)
-        varieties = [v['pokemon'] for v in pkmn.get('varieties', [])]
-        max_max = max(self.generations)
-        mon = self.mon_dict[max_max][int(dexn)]
-        gen = min((mon[2] or {'': -1}).values())
-        return [format_form(v, gen) for v in varieties]
+        return self.parse_forms(pkmn)
 
     def get_matches(self, raw_guess, max_gen):
 
@@ -230,11 +233,17 @@ class Service():
             # Search for pokemon if not tried
             pkmn = get_api(root, f'pokemon-species/{dexn}/', True)
             if pkmn is None: continue
+            gen = id_from_url(pkmn['generation']['url'])
+            forms = self.parse_forms(pkmn)
             favored = favored[1:]
-            out.append(pkmn)
+            out.append({
+                'name': pkmn['name'],
+                'id': pkmn['id'],
+                'generation': gen,
+                'forms': forms
+            })
 
         main_out = len(out)
-        print(f'Fully added {main_out} matches for {guess}')
 
         # Pad out results with other matches
         for dexn in (favored + other)[:n_partial]:
@@ -247,11 +256,9 @@ class Service():
             }
             out.append(pkmn)
         
-        print(f'Partially added {n_partial} others for {guess}')
-
         end_request = time.time()
-        print(end_request - start_request)
 
+        print(f'"{guess}": found {len(out)} options')
         return [format_pkmn(p) for p in out]
 
 

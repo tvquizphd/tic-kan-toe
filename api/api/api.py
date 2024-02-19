@@ -1,7 +1,7 @@
-from starlette.websockets import WebSocketDisconnect
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY as _422
 from starlette.status import HTTP_201_CREATED as _201
 from fastapi.exceptions import RequestValidationError
+from starlette.websockets import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 from fastapi.middleware.cors import CORSMiddleware
 from concurrent.futures import ThreadPoolExecutor
@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from starlette.requests import Request
 from fastapi import Depends, FastAPI, WebSocket
 from contextlib import asynccontextmanager
-from util.models import HasPokemon
 from api.service import to_service
 from util import to_multiplayer
 from util import to_config
@@ -24,6 +23,8 @@ async def lifespan(
     multiplayer = to_multiplayer()
     # Any startup costs before yield
     yield
+    # Sentinal to stop Q worker 
+    multiplayer.Q.put(None)
     print('API Server Shutdown Complete')
     # Any shutdown costs after yield
 
@@ -63,20 +64,28 @@ async def websocket_endpoint(
         multiplayer=Depends(to_multiplayer)
     ):
     await multiplayer.connect(user)
-    def n_users():
-        return len(multiplayer.users)
-    print(f'Opened socket. Now {n_users()} users') 
-    while multiplayer.running(user): 
+    def n_now():
+        return f'Now {len(multiplayer.users)} users'
+    print(f'Opened socket. {n_now()}') 
+    while True: 
         try:
-            data = await user.receive_text()
-            await multiplayer.send_text(data)
+            broadcast = await multiplayer.use_message(
+                user
+            )
+            await multiplayer.send_message(
+                broadcast
+            )
         except WebSocketDisconnect:
-            await multiplayer.disconnect(user)
-            print(f"Disconnected. Now {n_users()} users")
+            multiplayer.untrack_user(user)
+            print(f"Disconnected. {n_now()}")
+            break
+        except ConnectionClosed:
+            multiplayer.untrack_user(user)
+            print(f"Closed Connection. {n_now()}")
             break
         except asyncio.CancelledError:
-            await multiplayer.disconnect(user)
-            print(f"Cancelled. Now {n_users()} users")
+            multiplayer.untrack_user(user)
+            print(f"Cancelled Error. {n_now()}")
             break
 
 '''
