@@ -483,6 +483,13 @@ const main = async (api_port) => {
     const {
       contents, rows, cols
     } = updates.grid_state;
+    // Update and cache data
+    data.online = verify_online({
+      ...data.online, max_gen, badge_offer,
+      user_id: data.online.user_id
+    }, no_send);
+    data.online.is_on = updates.is_on
+    data.set_max_tries(updates.is_on); 
     /* TODO does this make sense?
      * failures, tries
      */
@@ -492,13 +499,6 @@ const main = async (api_port) => {
       }, 0)
       data.failures = []
     }
-    // Update and cache data
-    data.online = verify_online({
-      ...data.online, max_gen, badge_offer,
-      user_id: data.online.user_id
-    }, no_send);
-    data.online.is_on = updates.is_on
-    data.set_max_tries(updates.is_on); 
     data.ws_state = ws_state;
     data.pokemon = contents;
     data.rows = rows;
