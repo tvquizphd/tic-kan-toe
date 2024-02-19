@@ -82,8 +82,6 @@ const toPokemonGrid = (data, globalCSS) => {
             }
             return `background-image: url(${data.github_root}/sprites/items/mystery-egg.png)`;
           }
-          const egg_class = () => {
-          }
           return toTag('div')``({
               style: egg_style,
               class: 'centered full placeholder error'
@@ -111,11 +109,9 @@ const toPokemonGrid = (data, globalCSS) => {
             data.active_square = i;
             data.modal = 'search';
             // Prepare Autofocus
-            //setTimeout(() => {
-              const search = document.querySelector('tkt-search').shadowRoot;
-              const input = search.querySelector('input[autofocus]');
-              input.focus();
-            //},50)
+            const search = document.querySelector('tkt-search').shadowRoot;
+            const input = search.querySelector('input[autofocus]');
+            input.focus();
           }
         });
       });

@@ -317,7 +317,12 @@ const main = async (api_port) => {
       data.tries = Math.min(
         data.max_tries, data.tries
       );
-      data.failures = [];
+      data.failures = data.failures.filter((f) => {
+        return f <= data.max_tries;
+      });
+      data.err = has_failed(
+        data.failures, data.tries, data.max_tries
+      );
     },
     ws_ping: (is_on, ws_state) => {
       // Reopen the websocket
