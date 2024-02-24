@@ -324,11 +324,10 @@ const main = async (api_port) => {
         data.failures, data.tries, data.max_tries
       );
     },
-    ws_ping: (is_on, ws_state) => {
-      // Reopen the websocket
-      if (ws.readyState === WebSocket.CLOSED) {
-        ws = new WebSocket(ws_url);
-      }
+    ws_ping: (try_is_on, ws_state) => {
+      const is_on = (
+        ws.readyState === WebSocket.OPEN
+      ) && try_is_on;
       const updated = [
         data.ws_state != ws_state,
         data.online.is_on != is_on
@@ -336,15 +335,24 @@ const main = async (api_port) => {
       data.online.is_on = is_on;
       data.set_max_tries(is_on); 
       data.ws_state = ws_state;
+      // Reopen the websocket
+      if (ws.readyState === WebSocket.CLOSED) {
+        ws = new WebSocket(ws_url);
+      }
       if (updated) {
         remember(data, data.ws_send);
       };
     },
     ws_send: (opts, action=null) => {
       if (!data.online.is_on) return;
-      ws.send(data.to_message(
-        opts, action
-      ));
+      try {
+        ws.send(data.to_message(
+          opts, action
+        ));
+      }
+      catch (e) {
+        console.warn(e);
+      }
     },
     to_message: (opts, action=null) => {
       const online = {
@@ -411,7 +419,12 @@ const main = async (api_port) => {
     toMatches: async (guess, max_gen) => {
       const root = data.api_root;
       const matches = getMatches(root, guess, max_gen);
-      return await matches;
+      try {
+        return await matches;
+      }
+      catch (e) {
+        return [];
+      }
     },
     testGuess: async (mon) => {
       const col = data.active_square % 3; 
@@ -471,7 +484,8 @@ const main = async (api_port) => {
     }
   });
   ws.onclose = () => {
-    alert('game briefly unavailable');
+    alert('game disconnected');
+    data.ws_ping(false, 'hosting');
   }
   ws.onmessage = (event) => {
     if (!data.online.is_on) return;

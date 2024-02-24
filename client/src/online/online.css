@@ -10,22 +10,6 @@ div.menu {
   }
   & > div.main-row {
     grid-template-columns: auto 1fr auto;
-    & > div.header {
-      display: grid;
-      gap: var(--the-padding);
-      grid-auto-flow: column;
-      justify-items: center;
-      align-items: center;
-      & > div.button {
-        filter: var(--chosen-drop-shadow);
-      }
-    }
-    & > div.header.found {
-      & > div:not(.button) {
-        font-size: 1.2em;
-        filter: var(--chosen-drop-shadow);
-      }
-    }
     & > div.menu.icon {
       & > img {
         filter: var(--chosen-drop-shadow);
@@ -55,6 +39,17 @@ div.menu {
       padding: 0;
       overflow: hidden;
       margin: var(--the-padding);
+    }
+    & > div.header {
+      & > div.button {
+        filter: var(--chosen-drop-shadow);
+      }
+    }
+    & > div.header.found {
+      & > div:not(.button) {
+        font-size: 1.2em;
+        filter: var(--chosen-drop-shadow);
+      }
     }
   }
 

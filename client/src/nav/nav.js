@@ -140,9 +140,9 @@ const toNav = (data) => {
           const front_style = () => {
             const n = all_n().length;
             return {
-              5: 'width: 180px',
-              9: 'width: 300px'
-            }[n] || '';
+              2: 'width: 160px',
+              4: 'width: 300px'
+            }[evens().length] || '';
           }
           return toTag('div')`${evens}`({
             class: 'front',
@@ -155,9 +155,9 @@ const toNav = (data) => {
           const back_style = () => {
             const n = all_n().length;
             return {
-              5: 'width: 280px',
-              9: 'width: 300px'
-            }[n] || '';
+              3: 'width: 260px',
+              5: 'width: 300px'
+            }[odds().length] || '';
           }
           return toTag('div')`${odds}`({
             class: 'back',

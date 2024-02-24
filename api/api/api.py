@@ -76,15 +76,15 @@ async def websocket_endpoint(
                 broadcast
             )
         except WebSocketDisconnect:
-            multiplayer.untrack_client(client)
+            await multiplayer.untrack_client(client)
             print(f"Disconnected. {n_now()}")
             break
         except ConnectionClosed:
-            multiplayer.untrack_client(client)
+            await multiplayer.untrack_client(client)
             print(f"Closed Connection. {n_now()}")
             break
         except asyncio.CancelledError:
-            multiplayer.untrack_client(client)
+            await multiplayer.untrack_client(client)
             print(f"Cancelled Error. {n_now()}")
             break
 

@@ -20,7 +20,7 @@ const gen_gym_badges = new Map([
     [41,"bug"],[42,"cliff"],[43,"rumble"],[44,"plant"],[45,"voltage"],[46,"fairy"],[47,"psychic"],[48,"iceberg"]
   ])],
   [8, new Map([
-    [49,"grass"],[50,"water"],[51,"fire"],[52,"fighting"],[53,"ghose"],[54,"fairy"],[55,"rock"],[56,"ice"],[57,"dark"],[58,"dragon"]
+    [49,"grass"],[50,"water"],[51,"fire"],[52,"fighting"],[53,"ghost"],[54,"fairy"],[55,"rock"],[56,"ice"],[57,"dark"],[58,"dragon"]
   ])]
 ]);
 

@@ -68,7 +68,7 @@ const toOnlineMenu = (data, actions) => {
         if (this.found) {
           return 'Disconnect?';
         }
-        return `Search${ing()} all gyms`
+        return `Search${ing()} gyms`
       }
       const action_class = () => {
         return 'cancel action' + (
@@ -103,7 +103,7 @@ const toOnlineMenu = (data, actions) => {
           });
         }
         return toTag('div')`
-          ${action} of ${gen_range}
+          ${action}
         `({
           class: 'header'
         });
@@ -113,7 +113,7 @@ const toOnlineMenu = (data, actions) => {
         return '';
       }
       const main_row = toTag('div')`
-        ${reset}${header}${to_menu}
+        ${reset}<div></div>${to_menu}
       `({
         class: 'main-row'
       });
@@ -150,7 +150,7 @@ const toOnlineMenu = (data, actions) => {
           return toTag('div')`cancel`({
             class: 'cancel button',
             '@click': () => {
-              disconnect('hosting');
+              broadcast('hosting');
             }
           });
         }
@@ -169,7 +169,7 @@ const toOnlineMenu = (data, actions) => {
       const whose = () => {
         return ({
           'hosting': 'Your badge:',
-          'finding': 'Seeking badges:',
+          'finding': '',
           'found': 'At stake:'
         })[data.ws_state];
       }
@@ -181,8 +181,20 @@ const toOnlineMenu = (data, actions) => {
             class: 'found label'
           });
         }
+        const gen_str = () => {
+          if (this.finding) {
+            return `at or above gen ${this.data.max_gen}`
+          }
+          return `within ${gen_range()}`
+        }
+        const who_str = () => {
+          if (this.finding) {
+            return 'gym leaders';
+          }
+          return 'trainers';
+        }
         return toTag('div')`
-          <div>No battle</div><div>...yet</div>
+          <div>Finding ${who_str}</div><div>${gen_str}</div>
         `({
           class: 'label'
         });
@@ -193,7 +205,7 @@ const toOnlineMenu = (data, actions) => {
         class: 'label'
       });
       const minor_row = toTag('div')`
-        ${found_label}<div></div>${badge_label}${badges}
+        ${found_label}${header}${badge_label}${badges}
       `({
         class: 'minor-row'
       });
