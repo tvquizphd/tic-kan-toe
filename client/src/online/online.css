@@ -1,6 +1,7 @@
 div.menu {
   height: 100%;
   display: grid;
+  font-size: 80%;
   grid-template-rows: 1fr auto;
   background: var(--solid-main-background);
   & > div {

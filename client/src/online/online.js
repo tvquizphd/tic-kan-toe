@@ -66,9 +66,9 @@ const toOnlineMenu = (data, actions) => {
       }
       const action_text = () => {
         if (this.found) {
-          return 'Disconnect?';
+          return 'Quit?';
         }
-        return `Search${ing()} gyms`
+        return `Find${ing()} gyms`
       }
       const action_class = () => {
         return 'cancel action' + (
@@ -183,18 +183,18 @@ const toOnlineMenu = (data, actions) => {
         }
         const gen_str = () => {
           if (this.finding) {
-            return `at or above gen ${this.data.max_gen}`
+            return `at least gen ${this.data.max_gen}`
           }
-          return `within ${gen_range()}`
+          return `in ${gen_range()}`
         }
         const who_str = () => {
           if (this.finding) {
-            return 'gym leaders';
+            return 'leaders';
           }
           return 'trainers';
         }
         return toTag('div')`
-          <div>Finding ${who_str}</div><div>${gen_str}</div>
+          <div>Up for ${who_str}</div><div>${gen_str}</div>
         `({
           class: 'label'
         });
