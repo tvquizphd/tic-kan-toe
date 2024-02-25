@@ -311,7 +311,7 @@ const main = async (api_port) => {
     pokemon: pokemon,
     matches: no_matches,
     github_root: github_root,
-    ws_state: 'quitter',
+    ws_state: 'leaving',
     set_max_tries: (is_on) => {
       data.max_tries = [9, 5][+is_on];
       data.tries = Math.min(
@@ -505,7 +505,8 @@ const main = async (api_port) => {
     // Update and cache data
     data.online = verify_online({
       ...data.online, max_gen, badge_offer,
-      user_id: data.online.user_id
+      user_id: data.online.user_id,
+      group_ids: group_ids
     }, no_send);
     data.online.is_on = updates.is_on
     data.set_max_tries(updates.is_on); 

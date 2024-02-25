@@ -69,11 +69,8 @@ async def websocket_endpoint(
     print(f'Opened socket. {n_now()}') 
     while True: 
         try:
-            broadcast = await multiplayer.use_message(
+            await multiplayer.use_message(
                 client
-            )
-            await multiplayer.send_message(
-                broadcast
             )
         except WebSocketDisconnect:
             await multiplayer.untrack_client(client)

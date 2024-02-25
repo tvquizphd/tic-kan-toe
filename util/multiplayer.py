@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Any, Optional
 import threading
 from uuid import uuid4
+import copy
 import queue
 import json
 import sys
@@ -69,19 +70,15 @@ def pick_other(pair, k):
 def del_if(d, k):
     if k in d: del d[k]
 
-def clear_all_battles(memory, k1, k2=None):
-    battles = memory[MessageState.battle]
-    for bk in list(battles.keys()):
-        if k1 in bk or k2 in bk:
-            del_if(battles, bk)
-
 def history_update(history, memory, q_item):
-    history.pop(0)
     if q_item.message == None:
         return
-    history.append(memory_update(
+    updates = memory_update(
         memory, q_item.message
-    ))
+    )
+    for update in updates:
+        history.pop(0)
+        history.append(update)
 
 def history_clear(history, memory, k):
     # Cache the latest relevant history
@@ -101,30 +98,53 @@ def history_clear(history, memory, k):
         if k == h[0] or k in h[0]:
             history[hi] = None
 
-def memory_clear_pair(memory, pair):
-    if not isinstance(pair, tuple): return
+def clear_all_battles(memory, k1, k2=None):
+    battles = memory[MessageState.battle]
+    for bk in list(battles.keys()):
+        if k1 in bk or k2 in bk:
+            del_if(battles, bk)
+
+def clear_all_battles_etc(memory, pair):
+    keys = [ [pair], list(pair) ][
+        int(isinstance(pair, tuple))
+    ]
+    clear_all_battles(memory, *keys)
+    # Clear affiliated trainers and leaders
     leaders = memory[MessageState.leader]
     trainers = memory[MessageState.trainer]
-    clear_all_battles(memory, *pair)
-    for k in pair:
+    for k in keys:
         del_if(trainers, k)
         del_if(leaders, k)
 
 def memory_clear(memory, k):
-    battles = memory[MessageState.battle]
-    if isinstance(k, tuple):
-        memory_clear_pair(memory, k)
-        return
-    for bk in [*battles.keys()]:
-        if k not in bk: continue
-        memory_clear_pair(memory, bk)
-    trainers = memory[MessageState.trainer]
-    leaders = memory[MessageState.leader]
-    del_if(trainers, k)
-    del_if(leaders, k)
+    clear_all_battles_etc(memory, k)
+
+def simple_update(memory, message, k, new_state):
+    is_pair = isinstance(k, tuple)
+    message = copy.deepcopy(message)
+    message.group_ids = (
+        list(k) if is_pair else [ k ]
+    )
+    if not is_pair:
+        message.user_id = k
+    message.ws_state = new_state
+    memory[new_state][k] = message
+    return (k, message)
+
+def battle_update(memory, message, pair):
+    new_state = MessageState.battle
+    return simple_update(
+        memory, message, pair, new_state
+    )
+
+def leader_update(memory, message, k):
+    new_state = MessageState.leader
+    return simple_update(
+        memory, message, k, new_state
+    )
 
 def memory_update(memory, message):
-    own_id = message.user_id
+    own_k = message.user_id
     own_state = message.ws_state
     # Corresponding other dictionary
     relative_state, relatives = (
@@ -140,32 +160,23 @@ def memory_update(memory, message):
     )
     # Don't find self!
     if not is_battle:
-        del_if(relatives, own_id)
+        del_if(relatives, own_k)
     # Match first compatible record 
     matches = list(matches_by_max_gen(
         relative_state, relatives, message
     ))
-    no_matches = not len(matches)
-    memory_clear(memory, own_id)
+    # Clears associated battles, etc
+    memory_clear(memory, own_k)
     if is_battle:
-        if no_matches:
-            # Transition self to leader
-            new_state = MessageState.leader
-            new_kind = memory[new_state]
-            message.group_ids = [ own_id ]
-            message.ws_state = new_state
-            new_kind[own_id] = message
-            return ( own_id, message )
-        pair = matches[0][0]
-        # Stop tracking
+        if not len(matches):
+            return [
+                leader_update(memory, message, own_k)
+            ]
         if is_quitter:
-            message.is_on = False
-            clear_all_battles(memory, *pair)
-            message.group_ids = list(pair)
-            return ( own_id, message )
-        # Only one battle at once
-        for _pair,_ in matches[1:]:
-            clear_all_battles(memory, *_pair)
+            return [
+                leader_update(memory, message, k)
+                for k in matches[0][0]
+            ]
         # TODO -- handle battle conflicts
         # TODO -- using "grid_action"
         if (message.grid_action):
@@ -174,53 +185,27 @@ def memory_update(memory, message):
                 message.grid_action.content.name,
                 message.grid_action.position
             )
-        # Save and return battle
-        message.group_ids = list(pair)
-        battles = memory[MessageState.battle]
-        battles[pair] = message
-        return (pair, message)
-    # Update own record
-    if no_matches:
-        # Update own record 
-        message.group_ids = [own_id]
-        own_kind = memory[own_state]
-        own_kind[own_id] = message
-        return (
-            own_id, message 
-        )
-    battles = memory[MessageState.battle]
-    # Is hosting
-    is_leader = (
-        own_state == MessageState.leader
-    )
-    # Unexpected: close any existing battles
-    battle_matches = list(matches_by_max_gen(
-        MessageState.battle, battles, message
-    ))
-    # Code should be unreachable
-    for bk, _ in battle_matches:
-        print(
-            'Unexpected:', 'stale battles found', file=sys.stderr
-        )
-        del_if(battles, bk)
-    # Find first matching relative
+        return [
+            battle_update(memory, message, matches[0][0])
+        ] 
+    if not len(matches):
+        return [
+            simple_update(memory, message, own_k, own_state)
+        ]
+    # Handle first matching relative
+    memory_clear(memory, matches[0][0])
     match_id, match_message = matches[0]
-    clear_all_battles(memory, match_id, own_id)
-    memory_clear(memory, match_id)
     # Leader is always right!
-    message = (
-        message if is_leader else match_message
-    )
-    # Leader is always on right!
-    message.group_ids = [
-        (own_id, match_id),
-        (match_id, own_id)
-    ][int(is_leader)]
-    # Start, save, and return battle
-    message.ws_state = (MessageState.battle)
-    battle_id = tuple(message.group_ids)
-    battles[battle_id] = message
-    return (battle_id, message)
+    battle_k, message = [
+        [(own_k, match_id), match_message],
+        [(match_id, own_k), message]
+    ][int(
+        own_state == MessageState.leader
+    )]
+    # Create a new battle
+    return [
+        battle_update(memory, message, battle_k)
+    ] 
 
 def start_worker(q, history):
     # battle: Two user keys
@@ -414,8 +399,9 @@ class Multiplayer:
 
     async def use_message(self, client: WebSocket) -> Message:
         message = to_message(await client.receive_text()) 
+        group_ids = [*message.group_ids]
         print(
-            f'From: {message.group_ids}', message.ws_state
+            f'From: {group_ids}', message.ws_state
         )
         # Associate message user id with client 
         for user in self.users:
@@ -426,13 +412,18 @@ class Multiplayer:
         # Handle the message
         self.Q.put(QueueItem(message=message))
         self.Q.join()
-        message_k_v = search_history(
-            self.HISTORY, message.user_id
-        )
-        # Echo original input
-        if not message_k_v: return message
-        # Return modified input
-        return message_k_v[1]
+        # Send all unique messages
+        def find_history(k):
+            k_v = search_history(self.HISTORY, k)
+            if not k_v: return []
+            return [k_v[1]]
+        unique_messages = ({
+            tuple(message.group_ids): message
+            for k in group_ids for message in 
+            find_history(k)
+        }).values()
+        for broadcast in unique_messages:
+            await self.send_message(broadcast)
 
 @lru_cache()
 def to_multiplayer():
