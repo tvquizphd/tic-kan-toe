@@ -1,0 +1,24 @@
+.wrapper {
+  pointer-events: none;
+  & > .center {
+    display: grid;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: scroll;
+    padding: var(--the-big-padding);
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 1fr 4fr 1fr;
+    box-shadow: var(--the-box-shadow);
+    border-radius: var(--the-border-radius);
+    background-color: var(--modal-background);
+    & > h3 {
+      grid-column: 1 / -1;
+    }
+    & > .button {
+      text-align: center;
+      pointer-events: all;
+      cursor: pointer;
+      grid-column: 2;
+    }
+  }
+}

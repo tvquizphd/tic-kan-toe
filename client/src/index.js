@@ -10,6 +10,7 @@ import { toBackdrop } from 'backdrop';
 import { toPokemonGrid } from 'grid';
 import { toSearchModal } from 'search';
 import { toTimelineModal } from 'timeline';
+import { toReconnectModal } from 'reconnect';
 import { 
   badge_info, to_random_badge,
   to_min_gym_badge,
@@ -283,6 +284,74 @@ const main = async (api_port) => {
   const api_root = `https://${host}:${api_port}`;
   const ws_url = `wss://${host}:${api_port}/ws`;
   let ws = new WebSocket(ws_url);
+  const add_ws_events = () => {
+    ws.onopen = () => {
+      if (data.modal == 'reconnect') {
+        data.modal = null;
+      }
+    }
+    ws.onclose = () => {
+      data.modal = 'reconnect';
+    }
+    ws.onmessage = (event) => {
+      if (!data.online.is_on) return;
+      const updates = JSON.parse(event.data);
+      const {
+        group_ids, max_gen, badge_offer, ws_state
+      } = updates;
+      if (!group_ids.includes(data.online.user_id)) {
+        return;
+      }
+      // Mimic Server side logs
+      const group_str = group_ids.map(v => `'${v}'`).join(', ');
+      console.log(`From: (${group_str}) ${ws_state}`);
+      const {
+        contents, rows, cols
+      } = updates.grid_state;
+      // Update and cache data
+      data.online = verify_online({
+        ...data.online, max_gen, badge_offer,
+        user_id: data.online.user_id,
+        group_ids: group_ids
+      }, no_send);
+      data.online.is_on = updates.is_on
+      data.set_max_tries(updates.is_on); 
+      // TODO does this make sense?
+      if (ws_state == 'found' && data.ws_state != 'found') {
+        // Tries equal to number of filled-in contents
+        data.tries = contents.reduce((sum, v) => {
+          return sum + +(v != null);
+        }, 0)
+        data.failures = []
+      }
+      data.ws_state = ws_state;
+      data.pokemon = contents;
+      data.rows = rows;
+      data.cols = cols;
+      remember(data, no_send);
+    }
+  }
+  const check_ws_is = (k) => {
+    return ws.readyState === WebSocket[k];
+  }
+  const refresh_ws = ({ is_on, ws_state }) => {
+    // Handle new websocket
+    if (check_ws_is('CLOSED')) {
+      try {
+        ws = new WebSocket(ws_url);
+        add_ws_events();
+      }
+      catch (e) {
+        console.error(e);
+      }
+    }
+    return {
+      is_on: check_ws_is('OPEN'),
+      ws_state: [
+        'hosting', ws_state
+      ][+check_ws_is('OPEN')]
+    };
+  }
   const no_send = () => null;
   const no_matches = [];
   const {
@@ -310,8 +379,8 @@ const main = async (api_port) => {
     err: has_failed(failures, tries, 9),
     pokemon: pokemon,
     matches: no_matches,
+    ws_state: 'hosting',
     github_root: github_root,
-    ws_state: 'leaving',
     set_max_tries: (is_on) => {
       data.max_tries = [9, 5][+is_on];
       data.tries = Math.min(
@@ -324,21 +393,26 @@ const main = async (api_port) => {
         data.failures, data.tries, data.max_tries
       );
     },
-    ws_ping: (try_is_on, ws_state) => {
-      const is_on = (
-        ws.readyState === WebSocket.OPEN
-      ) && try_is_on;
+    ws_ping: (_is_on, _ws_state) => {
+      const { ws_state, is_on } = refresh_ws({
+        ws_state: _ws_state, is_on: _is_on 
+      });
       const updated = [
         data.ws_state != ws_state,
         data.online.is_on != is_on
-      ].some(x => x)
-      data.online.is_on = is_on;
+      ].some(x => x);
+      const group_ids = [
+        [ data.online.user_id ],
+        data.online.group_ids
+      ][+is_on]
+      data.online = {
+        ...data.online,
+        is_on: is_on,
+        group_ids: group_ids
+      }
       data.set_max_tries(is_on); 
       data.ws_state = ws_state;
       // Reopen the websocket
-      if (ws.readyState === WebSocket.CLOSED) {
-        ws = new WebSocket(ws_url);
-      }
       if (updated) {
         remember(data, data.ws_send);
       };
@@ -483,47 +557,12 @@ const main = async (api_port) => {
       return [ /* Phases to skip */ ].some(x => x);
     }
   });
-  ws.onclose = () => {
-    alert('game disconnected');
-    data.ws_ping(false, 'hosting');
-  }
-  ws.onmessage = (event) => {
-    if (!data.online.is_on) return;
-    const updates = JSON.parse(event.data);
-    const {
-      group_ids, max_gen, badge_offer, ws_state
-    } = updates;
-    if (!group_ids.includes(data.online.user_id)) {
-      return;
-    }
-    // Mimic Server side logs
-    const group_str = group_ids.map(v => `'${v}'`).join(', ');
-    console.log(`From: (${group_str}) ${ws_state}`);
-    const {
-      contents, rows, cols
-    } = updates.grid_state;
-    // Update and cache data
-    data.online = verify_online({
-      ...data.online, max_gen, badge_offer,
-      user_id: data.online.user_id,
-      group_ids: group_ids
-    }, no_send);
-    data.online.is_on = updates.is_on
-    data.set_max_tries(updates.is_on); 
-    /* TODO does this make sense?
-     * failures, tries
-     */
-    if (ws_state == 'found' && data.ws_state != 'found') {
-      data.tries = contents.reduce((sum, v) => {
-        return sum + +(v != null);
-      }, 0)
-      data.failures = []
-    }
-    data.ws_state = ws_state;
-    data.pokemon = contents;
-    data.rows = rows;
-    data.cols = cols;
-    remember(data, no_send);
+  add_ws_events();
+  window.onfocus = () => {
+    if (!check_ws_is('CLOSED')) return;
+    const is_on = data.online.is_on;
+    const ws_state = data.ws_state;
+    data.ws_ping(is_on, ws_state);
   }
   window.addEventListener('resize', handleResize(data));
   document.adoptedStyleSheets = [
@@ -534,6 +573,7 @@ const main = async (api_port) => {
   const pokemonGrid = toPokemonGrid(data, globalCSS);
   const searchModal = toSearchModal(data, globalCSS);
   const timelineModal = toTimelineModal(data, globalCSS);
+  const reconnectModal = toReconnectModal(data, globalCSS);
   // Animated Background
   const backdrop = toBackdrop(data);
   // Containers
@@ -545,6 +585,7 @@ const main = async (api_port) => {
   return toTag('div')`
     ${backdrop}${centered}
     ${searchModal}${timelineModal}
+    ${reconnectModal}
   `({
     class: 'centered root wrapper',
   })(document.body);
