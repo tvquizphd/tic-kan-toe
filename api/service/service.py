@@ -198,22 +198,20 @@ class Service():
     def get_forms(self, dexn):
         root = self.api_url
         pkmn = get_api(root, f'pokemon-species/{dexn}/', True)
-        return self.parse_forms(pkmn)
+        return pkmn, self.parse_forms(pkmn)
 
     def get_matches(self, raw_guess, max_gen):
 
-        start_request = time.time()
+        # No matches for 1 or 2 chars
         guess = raw_guess.lower()
-
-        min_chars = 2
         n_chars = len(guess)
-        bonus_chars = n_chars - min_chars
-        if bonus_chars < 0:
+        if n_chars <= 2:
             return []
 
-        # Example trigrams: cha, mag, dra, iro
-        two = self.two_grams[max_gen].get(guess[:2], [])
+        # Pokemon with same first 3 letters
         three = self.three_grams[max_gen].get(guess[:3], [])
+        # Pokemon with same first 2 letters
+        two = self.two_grams[max_gen].get(guess[:2], [])
 
         # Sort two-gram pokemon by match quality
         favored = sorted(
@@ -230,46 +228,47 @@ class Service():
         )
 
         out = []
-        ntri = len(three)
-        # Increase results by string length
-        defaults = (2, clamp(ntri, 2, 12))
-        (n_fetches, n_partial) = ({
-            0: (1, 2),
-            1: (1, 4),
-            2: (2, clamp(ntri, 1, 8)),
-        }).get(bonus_chars, defaults)
+        # Examples of trigrams:
+        # common: cha, mag, dra, iro
 
+        # Few matches for short strings
+        n_fetches, n_partial = (1, 6)
+        # More matches for long strings 
+        if n_chars > 3:
+            n_fetches = clamp(len(three), 2, 6)
+            n_partial = clamp(len(two), 2, 12)
+        
         root = self.api_url
         # Fetch some favored pokemon
-        for _ in favored[:n_fetches]:
+        for _ in range(n_fetches):
+            if not len(favored): break
             dexn = favored[0]
-            # Search for pokemon if not tried
-            pkmn = get_api(root, f'pokemon-species/{dexn}/', True)
-            if pkmn is None: continue
-            gen = id_from_url(pkmn['generation']['url'])
-            forms = self.parse_forms(pkmn)
-            favored = favored[1:]
+            favored.pop(0)
+            pkmn, forms = self.get_forms(dexn)
             out.append({
                 'name': pkmn['name'],
                 'id': pkmn['id'],
-                'generation': gen,
-                'forms': forms
+                'forms': forms,
+                'generation': id_from_url(
+                    pkmn['generation']['url']
+                )
             })
 
-        main_out = len(out)
-
-        # Pad out results with other matches
+        # Pad out results with other partial matches
         for dexn in (favored + other)[:n_partial]:
-            mon = self.mon_dict[max_gen][dexn]
-            gen = min((mon[2] or {'': -1}).values())
-            name = mon[0]
+            name, _, region_dict = (
+                self.mon_dict[max_gen][dexn]
+            )
+            gen = (
+                min(region_dict.values())
+                if len(region_dict) else -1
+            )
             pkmn = { 
                 'name': name, 'id': dexn,
                 'generation': gen
             }
             out.append(pkmn)
         
-        end_request = time.time()
         return [format_pkmn(p) for p in out]
 
 

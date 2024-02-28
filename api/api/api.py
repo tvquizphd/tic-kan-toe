@@ -123,7 +123,8 @@ Pokemon forms and search
 def get_forms(
         config=Depends(to_config), dexn: str = ''
     ):
-    return to_service(config).get_forms(dexn)
+    _, forms = to_service(config).get_forms(dexn)
+    return forms
 
 @pd_api.get("/api/matches")
 def get_matches(
