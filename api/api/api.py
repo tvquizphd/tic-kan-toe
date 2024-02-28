@@ -130,10 +130,9 @@ def get_matches(
         config=Depends(to_config), guess: str = '',
         max_gen: int | None = None
     ):
-    max_max = max(config.generations)
-    max_gen = min(
-        max_gen or max_max, max_max
-    )
+    gens = config.generations
+    if max_gen not in gens:
+        max_gen = max(gens)
     return to_service(config).get_matches(guess, max_gen)
 
 '''

@@ -178,11 +178,22 @@ class Service():
         return { 'ok': ok }
 
     def parse_forms(self, pkmn):
-        varieties = [v['pokemon'] for v in pkmn.get('varieties', [])]
-        max_max = max(self.generations)
-        mon = self.mon_dict[max_max][int(pkmn['id'])]
-        gen = min((mon[2] or {'': -1}).values())
-        return [format_form(v, gen) for v in varieties]
+        varieties = [
+            v['pokemon'] for v in pkmn.get('varieties', [])
+        ]
+        gens = self.generations
+        # Find pokemon regions dict
+        mon = self.mon_dict[max(gens)][
+            int(pkmn['id'])
+        ]
+        region_dict = mon[2]
+        gen = (
+            min(region_dict.values())
+            if len(region_dict) else -1
+        )
+        return [
+            format_form(v, gen) for v in varieties
+        ]
 
     def get_forms(self, dexn):
         root = self.api_url
