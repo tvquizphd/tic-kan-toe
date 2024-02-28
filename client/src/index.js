@@ -346,7 +346,9 @@ const main = async (api_port) => {
       }
     }
     return {
-      is_on: check_ws_is('OPEN'),
+      is_on: (
+        is_on && check_ws_is('OPEN')
+      ),
       ws_state: [
         'hosting', ws_state
       ][+check_ws_is('OPEN')]
