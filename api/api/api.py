@@ -106,14 +106,12 @@ def get_valid_combos(
         config=Depends(to_config),
         max_gen: int | None = None
     ):
-    max_max = max(config.generations)
-    max_gen = min(
-        max_gen or max_max, max_max
-    )
-    valid_combos = config.valid_combos[max_gen]
+    gens = config.generations
+    combos = config.valid_combos[(
+        max_gen if max_gen in gens else max(gens)
+    )]
     return [
-        { 'combo': combo }
-        for combo in valid_combos
+        { 'combo': combo } for combo in combos 
     ]
 
 
