@@ -232,11 +232,11 @@ class Service():
         # common: cha, mag, dra, iro
 
         # Few matches for short strings
-        n_fetches, n_partial = (1, 6)
+        n_fetches, n_partial = (1, 3)
         # More matches for long strings 
         if n_chars > 3:
-            n_fetches = clamp(len(three), 2, 6)
-            n_partial = clamp(len(two), 2, 12)
+            n_fetches = clamp(len(three), 2, 5)
+            n_partial = clamp(len(two), 2, 10)
         
         root = self.api_url
         # Fetch some favored pokemon
