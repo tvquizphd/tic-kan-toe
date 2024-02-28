@@ -157,24 +157,33 @@ class Service():
         root = self.api_url
         pkmn = get_api(root, f'pokemon/{identifier}/')
         dexn = id_from_url(pkmn["species"]["url"])
-        max_max = max(self.generations)
-        mon = self.mon_dict[max_max][dexn]
-        types = list(
-            self.type_combos[mon[1][0]]
+        # Maximum maximum generation
+        max_gen = max(self.generations)
+        _, combo_ids, region_dict = (
+            self.mon_dict[max_gen][dexn]
         )
-        # Find original region
-        regions = list((mon[2] or { }).keys())
-        
-        # All conditions met within all types
-        conditions = []
-        if len(types) == 1:
-            conditions.append(self.MONO)
-        valid = (
-            types + regions + conditions
+        valid_conditions = []
+        # All type conditions
+        type_combo = list(
+            self.type_combos[combo_ids[0]]
         )
-        ok = all([fn(s,valid) for (s,fn) in fns])
+        valid_conditions += type_combo
+        # Monotype condition
+        if len(type_combo) == 1:
+            valid_conditions.append(self.MONO)
+        # Original region condition
+        valid_conditions += (
+            list(region_dict.keys())
+            if len(region_dict) else []
+        )
+        # Evaluate against valid conditions
+        ok = all([
+            fn(s, valid_conditions)
+            for (s, fn) in fns
+        ])
         if ok:
-            print(f'{pkmn["name"]}:', ','.join(valid))
+            ok_str = ','.join(valid_conditions)
+            print(f'{pkmn["name"]}: {ok_str}')
         return { 'ok': ok }
 
     def parse_forms(self, pkmn):
