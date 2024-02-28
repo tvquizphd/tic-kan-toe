@@ -55,10 +55,10 @@ const getLatestMetadata = async (root, wiki) => {
   const gen_years = await getGenerationYears(wiki);
   const response = await fetchWrapper(url);
   const out = (await response.json()) || {
-    max_gen: 1, gen_nums: 1
+    defaults: { max_gen: 1 }
   };
-  const { max_gen, gen_nums } = out;
-  return { max_gen, gen_nums, gen_years };
+  const { max_gen } = out.defaults;
+  return { max_gen, gen_years };
 }
 
 const getValidCombos = async (root, max_gen=null) => {

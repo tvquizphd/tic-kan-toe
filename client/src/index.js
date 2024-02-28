@@ -205,7 +205,7 @@ const read_hash = (server_meta) => {
   const args = window.location.hash.slice(1).split('/');
   const [max_gen] = args;
   return {
-    max_gen: parseInt(max_gen) || server_meta.max_gen
+    max_gen: parseInt(max_gen) || server_meta.defaults.max_gen
   }
 }
 

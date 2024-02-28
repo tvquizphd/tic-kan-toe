@@ -89,35 +89,20 @@ async def websocket_endpoint(
 Constants
 '''
 
-@pd_api.get("/api/regions")
-def get_regions(
-        config=Depends(to_config),
-        max_gen: int | None = None
-    ):
-    max_max = max(config.generations)
-    max_gen = min(
-        max_gen or max_max, max_max
-    )
-    all_regions = config.all_regions
-    return [
-        { 'region': r[1] }
-        for r in all_regions
-        if not max_gen or r[0] <= max_gen
-    ]
-
 @pd_api.get("/api/latest_metadata")
-def get_regions(
+def get_latest_metadata(
         config=Depends(to_config),
         max_gen: int | None = None
     ):
     return {
-        'max_gen': config.default_max_gen,
-        'gen_nums': config.generations
+        'defaults': {
+            'max_gen': config.default_max_gen,
+        }
     }
 
 
 @pd_api.get("/api/valid_combos")
-def get_regions(
+def get_valid_combos(
         config=Depends(to_config),
         max_gen: int | None = None
     ):
