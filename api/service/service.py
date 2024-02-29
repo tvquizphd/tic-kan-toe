@@ -99,12 +99,21 @@ def format_pkmn(p):
 def clamp(v, low, high):
     return min(high, max(low, v))
 
+def to_min_region_gen(region_dict):
+    has_regions = (
+        region_dict and len(region_dict)
+    )
+    return (
+        min(region_dict.values())
+        if has_regions else -1
+    )
+
 class Service():
     def __init__(self, config):
         self.mon_dict = {
             gen: {
                 i:v for i,v in enumerate(config.mon_list,1)
-                if min((v[2] or {'': -1}).values()) <= gen
+                if to_min_region_gen(v[2]) <= gen
             }
             for gen in config.generations
         }
@@ -178,8 +187,7 @@ class Service():
         )
         # Evaluate against valid conditions
         ok = all([
-            fn(s, valid_conditions)
-            for (s, fn) in fns
+            fn(s, valid_conditions) for (s, fn) in fns
         ])
         if ok:
             ok_str = ','.join(valid_conditions)
@@ -195,11 +203,7 @@ class Service():
         mon = self.mon_dict[max(gens)][
             int(pkmn['id'])
         ]
-        region_dict = mon[2]
-        gen = (
-            min(region_dict.values())
-            if len(region_dict) else -1
-        )
+        gen = to_min_region_gen(mon[2])
         return [
             format_form(v, gen) for v in varieties
         ]
