@@ -1,5 +1,6 @@
 *.pem
 env.json
+*.env.csv
 .DS_Store
 tic-kan-toe
 api/state/*.json

@@ -45,7 +45,7 @@ const toNav = (data) => {
         ][+this.need_reset];
       }
       const reset = toTag('div')`
-      <img src="${data.github_root}/sprites/items/mystery-egg.png">
+      <img src="data/egg.png">
       </img><div>Reset</div>`({
           class: reset_class,
           '@click': () => {

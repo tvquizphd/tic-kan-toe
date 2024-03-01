@@ -3,14 +3,50 @@ from pydantic import BaseModel
 from functools import lru_cache
 from typing import Dict, List
 from typing import Optional, Union
+from models import unpackage_mon
+from models import package_mon
+from models import to_dex_map
+from models import to_form
+from models import to_mon
+from models import Mon, Form
+from models import DexMap 
 
 from urllib.parse import urlparse
 import requests
 import logging
 import json
+import csv
 
-CONFIG = 'env.json'
+CONFIG = {
+    'ENV': 'env.json',
+    'EXTRA_FORM_NAMES': 'extra-form-names.env.csv'
+}
 MONO = 'monotype'
+
+def to_form_data(by_game_group, form, quantifier, key):
+    found_game = False
+    for group, data in by_game_group.items():
+        if form.game_group == group:
+            found_game = True
+        if not found_game:
+            continue
+        for val in getattr(data, key):
+            yield val
+        # Strict only allows first game
+        if quantifier != 'ALL': break
+        # Subsequent games
+
+def to_form_generations(*args):
+    return to_form_data(*(args+('generations',)))
+
+def to_form_regions(*args):
+    return to_form_data(*(args+('regions',)))
+
+def to_generations(by_game_group, mon, quantifier):
+    for form in mon.forms:
+        yield from to_form_generations(
+            by_game_group, form, quantifier
+        )
 
 # TODO redundant in service.py
 def id_from_url(url):
@@ -27,48 +63,55 @@ def get_api(root, endpoint, unsure=False):
             logging.critical(e, exc_info=True)
         return None
 
-def to_valid_combos(gens, mon_list, game_list, type_combos):
+def to_valid_combos(mons, dex_map, type_combos):
     first_gens = dict()
-    for mon in mon_list:
-        if not mon[2]: continue
-        gen = min(mon[2].values())
-        regions = list(mon[2].keys())
-        typing = type_combos[mon[1][0]]
-        grid_pairs = [
-          tuple(sorted([r,t]))
-          for t in typing for r in regions
-        ]
-        if len(typing) == 2:
-            grid_pairs.append(tuple(typing))
-        else:
-            grid_pairs += [
-                tuple(sorted([v, MONO]))
-                for v in [*regions, typing[0]]
+    by_generation = dex_map.by_generation
+    by_game_group = dex_map.by_game_group
+
+    for mon in mons:
+        for form in mon.forms:
+            # Treat gimics as from their original games 
+            gimics = ['mega', 'primal', 'origin', 'gmax']
+            og_form = mon.forms[0] if (
+                len([
+                    None for part in form.name.split('-')
+                    if part in gimics
+                ])
+            ) else form
+            gens = list(to_form_generations(by_game_group, og_form, 'SOME'))
+            regions = list(to_form_regions(by_game_group, og_form, 'SOME'))
+            if not len(gens) or not len(regions):
+                continue
+            combo =(type_combos[form.type_combo])
+            types = list(set(combo))
+            # Pair any type with first region
+            first_region = regions[0]
+            grid_pairs = [
+              tuple(sorted([first_region,t]))
+              for t in types
+            ] + [
+                tuple(sorted(c)) for c in [combo]
+                if len(c) == 2
+            ] + [
+                tuple(sorted(
+                    [v, MONO]
+                )) for c in [combo]
+                for v in [*regions, c[0]]
+                if len(c) == 1
             ]
-        for c in grid_pairs:
-            c_min_gen = first_gens.get(c,max(gens)+1)
-            first_gens[c] = min(gen, c_min_gen)
+            # Find first generation of pair
+            all_gens = list(by_generation.keys())
+            gen_limit = max(all_gens) + 1
+            first_gen = min(gens)
+            for c in grid_pairs:
+                c_min_gen = first_gens.get(c, gen_limit)
+                first_gens[c] = min(first_gen, c_min_gen)
     return {
         gen: sorted([
             c for c,v in first_gens.items() if v <= gen
         ])
-        for gen in gens 
+        for gen in by_generation.keys()
     } 
-
-def to_all_regions(game_list):
-    game_regions = [
-        (game[0], region)
-        for game in game_list
-        for region in game[2]
-    ]
-    all_regions = []
-
-    for region in game_regions:
-        region_names = [r[1] for r in all_regions]
-        if region[1] not in region_names:
-            all_regions.append(region)
-
-    return all_regions
 
 def describe_type_combos(api_url):
     type_results = get_api(api_url, 'type/')['results']
@@ -81,94 +124,68 @@ def describe_type_combos(api_url):
     # Ensure no duplicate types
     return sorted(set(generate_types(all_types)))
 
-def describe_mon(dexn, game_list, type_combos, api_url):
-
-    gen_dict = parse_generations(game_list)
-    all_regions = to_all_regions(game_list)
-    pre_config = PreConfig(
-        gen_dict=gen_dict, all_regions=all_regions
+def get_form(form_id, type_combos, mon_id, api_url):
+    f = get_api(api_url, f'pokemon-form/{form_id}/')
+    type_names = tuple(sorted(set(
+        t['type']['name'] for t in f.get('types', [])
+    )))
+    type_combo = type_combos.index(type_names)
+    game_group = id_from_url(f['version_group']['url'])
+    name = f['name']
+    return to_form(
+        name, form_id, type_combo, game_group, mon_id
     )
 
-    def form_to_species(pkmn):
-        species_id = id_from_url(pkmn["species"]["url"])
-        return get_api(api_url, f'pokemon-species/{species_id}/')
+def get_forms(mon_id, type_combos, api_url):
+    return [
+        get_form(
+            id_from_url(p['url']), type_combos, mon_id, api_url
+        )
+        for p in get_api(
+            api_url, f'pokemon/{mon_id}/'
+        )['forms']
+    ]
 
-    def to_regional_dex_list(pkmn):
-        species = form_to_species(pkmn)
-        gen_id = id_from_url(species["generation"]["url"])
-        gen_list = pre_config.gen_dict[gen_id]
-        dex_list = [
-            did for game in gen_list
-            for did in game[1]
-        ]
-        # Return all sorted dex IDs
-        return list(sorted(set(dex_list)))
-
-    def to_first_region(pkmn_id, pkmn):
-        name = pkmn['name']
-        print(pre_config.all_regions)
-        region_dict = {
-            r: g for g,r in set(pre_config.all_regions)
-        }
-        # Use any region found in name
-        for region_name in name.split('-'):
-            if region_name in region_dict:
-                generation = region_dict[region_name]
-                print(f'#{pkmn_id} {name} from {region_name}')
-                return { region_name: generation }
-        # Use first pokedex if no region in name
-        for did in to_regional_dex_list(pkmn):
-            dex = get_api(api_url, f'pokedex/{did}/')
-            region_name = dex['region']['name']
-            dex_species = [
-                id_from_url(d['pokemon_species']['url'])
-                for d in dex['pokemon_entries']
-            ]
-            # Pokemon not in this regional dex
-            if pkmn_id not in dex_species:
-                continue
-            if region_name not in region_dict:
-                continue
-            generation = region_dict[region_name]
-            print(f'#{pkmn_id} {name} from {region_name}')
-            return { region_name: generation }
-        return None
-
-    pkmn = get_api(api_url, f'pokemon/{dexn}/')
-    type_combo = tuple(sorted(set([
-        t['type']['name'] for t in pkmn.get('types', [])
-    ])))
-    type_combo_index = type_combos.index(type_combo)
-    # TODO: multiple types per pokemon (variants)?
-    return (
-        pkmn['name'], [type_combo_index],
-        to_first_region(dexn, pkmn)
-    )
+def get_mon(dexn, dex_map, type_combos, api_url):
+    pkmn = get_api(api_url, f'pokemon-species/{dexn}/')
+    forms = [
+        form 
+        for v in pkmn.get('varieties', [])
+        for form in get_forms(
+            id_from_url(v['pokemon']['url']),
+            type_combos, api_url
+        )
+    ]
+    name = pkmn['name']
+    return to_mon(dexn, forms, name)
 
 
-def parse_generations(game_list):
-    all_gen_ids = set([
-       game[0] for game in game_list
-    ])
-    gen_dexes = {
-        gen: [
-            game for game in game_list
-            if gen == game[0]
-        ]
-        for gen in list(all_gen_ids)
-    }
-    return gen_dexes
+def yield_alt_forms(mon):
+    # Names of all forms but default
+    for form in mon.forms[1:]:
+        yield form.form_id, form.name
 
-def to_ngrams(gens, mon_list):
+
+def describe_mon(dexn, dex_map, type_combos, api_url, todo=False):
+    mon = get_mon(dexn, dex_map, type_combos, api_url)
+    return package_mon(mon), list(yield_alt_forms(mon))
+
+
+def to_ngrams(dex_map, mons):
+    by_generation = dex_map.by_generation
+    by_game_group = dex_map.by_game_group
     three_grams = dict()
-    for dexn,mon in enumerate(mon_list, 1):
-        for max_gen in gens:
-            name = mon[0]
-            mon_gen = min((mon[2] or {'': -1}).values())
-            if mon_gen > max_gen: continue
+    for mon in mons:
+        for max_gen in by_generation.keys():
+            gens = list(to_generations(by_game_group, mon, 'ALL'))
+            name = mon.name
+            mon_gen = min(gens) 
+            if not mon_gen or mon_gen > max_gen: continue
             three = three_grams.get(max_gen, {})
             dex_list = three.get(name[:3], [])
-            three[name[:3]] = dex_list + [dexn]
+            three[name[:3]] = dex_list + [
+                mon.id
+            ]
             three_grams[max_gen] = three
 
     two_grams = dict()
@@ -181,33 +198,106 @@ def to_ngrams(gens, mon_list):
 
     return (three_grams, two_grams)
 
+
+def fill_gen_dicts(**kwargs):
+    mons = kwargs['mons']
+    by_generation = kwargs['dex_map'].by_generation
+    by_game_group = kwargs['dex_map'].by_game_group
+    gen_limit = 1 + max(by_generation.keys())
+    gen_range = lambda min_gen: range(min_gen, gen_limit)
+    for mon in mons:
+        mon_origin_gen = min(
+            to_generations(by_game_group, mon, 'SOME')
+        )
+        for gen in gen_range(mon_origin_gen):
+            gen_dict = kwargs["gen_mon_dict"][gen]
+            gen_dict[mon.id] = mon
+        for form in mon.forms:
+            form_origin_gen = min(
+                to_form_generations(by_game_group, form, 'SOME')
+            )
+            for gen in gen_range(form_origin_gen):
+                gen_dict = kwargs["gen_form_dict"][gen]
+                gen_dict[form.form_id] = form
+    return kwargs
+
+def read_mon_list():
+    try:
+        with open(CONFIG['ENV'], 'r') as f:
+            kwargs = json.loads(f.read())
+            return kwargs['mon_list']
+    except FileNotFoundError:
+        return []
+
+def read_extra_form_names():
+    try:
+        with open(CONFIG['EXTRA_FORM_NAMES'], 'r') as f:
+            form_reader = csv.reader(f, delimiter=',')
+            for index,name in form_reader:
+                yield int(index), name
+    except FileNotFoundError:
+        pass
+
+
 @lru_cache()
 def to_config():
-    with open(CONFIG, 'r') as f:
+    extra_form_name_dict = dict()
+    for form_id, name in read_extra_form_names():
+        extra_form_name_dict[form_id] = name
+
+    with open(CONFIG['ENV'], 'r') as f:
         kwargs = json.loads(f.read())
-        kwargs["mon_name_dict"] = {
-            dexn: mon[0] for dexn,mon
-            in enumerate(kwargs['mon_list'], 1)
+        kwargs['extra_form_name_dict'] = extra_form_name_dict
+        dex_map = to_dex_map(kwargs['game_list'])
+        generations = sorted(list(
+            dex_map.by_generation.keys()
+        ))
+        mons = [
+            unpackage_mon(packaged, extra_form_name_dict)
+            for packaged in kwargs['mon_list']
+        ]
+        # All forms and mons per all max generations
+        kwargs["gen_form_dict"] = {
+            gen: dict() for gen in generations
         }
+        kwargs["gen_mon_dict"] = {
+            gen: dict() for gen in generations
+        }
+        kwargs["form_mon_dict"] = {
+            form.form_id: mon
+            for mon in mons for form in mon.forms
+        }
+        kwargs["mons"] = mons
+        kwargs["dex_map"] = dex_map
+        filled = fill_gen_dicts(**kwargs)
+        kwargs["gen_mon_dict"] = filled['gen_mon_dict']
+        kwargs["gen_form_dict"] = filled['gen_form_dict']
+        # All ids per all 2 or 3 letter name prefixes
         (three_grams, two_grams) = to_ngrams(
-            kwargs['generations'], kwargs['mon_list']
+            dex_map, mons 
         )
         kwargs["two_grams"] = two_grams
         kwargs["three_grams"] = three_grams
-        kwargs["all_regions"] = to_all_regions(
-            kwargs['game_list']
-        )
+        kwargs["generations"] = generations 
         kwargs["valid_combos"] = to_valid_combos(
-            kwargs['generations'], kwargs['mon_list'],
-            kwargs['game_list'], kwargs['type_combos']
+            mons, dex_map, kwargs['type_combos']
         )
+        kwargs["mon_name_dict"] = {
+            mon.id: mon.name for mon in mons
+        }
         # Complete config derived from JSON
         return Config(
             MONO=MONO, **kwargs
         )
 
 def set_config(**kwargs):
-    with open(CONFIG, 'w') as f:
+    form_name_list = [*kwargs['form_name_list']]
+    del kwargs['form_name_list']
+    with open(CONFIG['EXTRA_FORM_NAMES'], 'w') as f:
+        form_writer = csv.writer(f, delimiter=',')
+        for form_id, name in form_name_list:
+            form_writer.writerow([form_id, name])
+    with open(CONFIG['ENV'], 'w') as f:
         f.write(json.dumps(kwargs)) 
 
 class Ports(BaseModel):
@@ -217,16 +307,10 @@ class Ports(BaseModel):
 Types = List[Union[
     tuple[str], tuple[str,str]
 ]]
-Games = List[tuple[
-    int, List[int], List[str]
+PackagedGames = List[tuple[
+    int, int, List[int], List[str]
 ]]
-Mons = List[tuple[
-    str, List[int], Optional[Dict[str, int]]
-]]
-
-class PreConfig(BaseSettings):
-    gen_dict: Dict[int, Games]
-    all_regions: List[tuple[int, str]]
+PackagedMons = List[List[Union[str, int]]]
 
 class Config(BaseSettings):
 
@@ -235,12 +319,17 @@ class Config(BaseSettings):
     mon_name_dict: Dict[int, str]
 
     default_max_gen: int
-    all_regions: List[tuple[int, str]]
     valid_combos: Dict[int, Types]
     generations: List[int]
     type_combos: Types 
-    game_list: Games
-    mon_list: Mons 
+    extra_form_name_dict: Dict[int, str]
+    gen_form_dict: Dict[int, Dict[int, Form]]
+    gen_mon_dict: Dict[int, Dict[int, Mon]]
+    form_mon_dict: Dict[int, Mon]
+    game_list: PackagedGames
+    mon_list: PackagedMons 
+    mons: List[Mon]
+    dex_map: DexMap
     ports: Ports
     api_url: str
     MONO: str

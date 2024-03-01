@@ -12,6 +12,7 @@ class MessageState(str, Enum):
 
 class ActionContent(BaseModel):
     generation: int
+    mon_id: int
     name: str
     key: int
     id: int

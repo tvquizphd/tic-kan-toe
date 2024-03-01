@@ -121,10 +121,12 @@ Pokemon forms and search
 
 @pd_api.get("/api/forms")
 def get_forms(
-        config=Depends(to_config), dexn: str = ''
+        config=Depends(to_config), dexn: int | None = None
     ):
-    _, forms = to_service(config).get_forms(dexn)
-    return forms
+    if not dexn:
+        return []
+    _, full_forms = to_service(config).get_full_forms(dexn)
+    return full_forms
 
 @pd_api.get("/api/matches")
 def get_matches(
@@ -137,13 +139,13 @@ def get_matches(
     return to_service(config).get_matches(guess, max_gen)
 
 '''
-Validate guess
+Validate guess on specific form
 '''
 
 @pd_api.get("/api/test")
 def run_test(
         config=Depends(to_config),
-        identifier: str = '',
+        form_id: int | None = None,
         conditions: str = ''
     ):
     # Comparison against conditions
@@ -152,4 +154,4 @@ def run_test(
         (s, lambda x,arr: any([str_cmp(x,y) for y in arr]))
         for s in conditions.split(',')
     ]
-    return to_service(config).run_test(identifier, fns)
+    return to_service(config).run_test(form_id, fns)

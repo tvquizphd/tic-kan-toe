@@ -1,9 +1,9 @@
 from fastapi import WebSocket
 from functools import lru_cache
-from util.models import Message
-from util.models import MessageState
-from util.models import from_message
-from util.models import to_message
+from models import Message
+from models import MessageState
+from models import from_message
+from models import to_message
 from pydantic import BaseModel
 from typing import Any, Optional
 import threading

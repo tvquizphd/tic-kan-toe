@@ -62,7 +62,7 @@ const toPokemonGrid = (data, globalCSS) => {
       });
       const squares = mons.map((to_mon, i) => () => {
         const no_mon = () => to_mon() == null;
-        const to_id = () => to_mon()?.id;
+        const to_id = () => to_mon()?.mon_id;
         const to_name = () => to_mon()?.name;
         const to_gen = () => {
           const gen = to_mon()?.generation

@@ -57,8 +57,8 @@ const getLatestMetadata = async (root, wiki) => {
   const out = (await response.json()) || {
     defaults: { max_gen: 1 }
   };
-  const { max_gen } = out.defaults;
-  return { max_gen, gen_years };
+  const defaults = out.defaults;
+  return { defaults, gen_years };
 }
 
 const getValidCombos = async (root, max_gen=null) => {
@@ -85,7 +85,7 @@ const getForms = async (root, guess) => {
   const url = `${root}/api/forms?${params.toString()}`;
   const response = await fetchWrapper(url);
   const out = (await response.json()) || [];
-  return out.map(v => v?.form).filter(v => v);
+  return out.filter(v => v);
 }
 
 const getMatches = async (root, guess, max_gen=null) => {
@@ -98,9 +98,9 @@ const getMatches = async (root, guess, max_gen=null) => {
   return out.map(v => v?.pokemon).filter(v => v);
 }
 
-const testGuess = async (root, identifier, conditions) => {
+const testGuess = async (root, form_id, conditions) => {
   const params = new URLSearchParams();
-  params.append('identifier', identifier);
+  params.append('form_id', form_id);
   params.append('conditions', conditions.join(','));
   const url = `${root}/api/test?${params.toString()}`;
   const response = await fetchWrapper(url);

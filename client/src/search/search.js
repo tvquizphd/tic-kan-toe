@@ -100,9 +100,9 @@ const toSearchModal = (data, actions) => {
         }
         return [
           ...forms, ...p.forms.map((f) => {
-            const { name, generation, id } = f;
+            console.log(JSON.stringify(f))
             return {
-              name, generation, id, key: id
+              ...f, key: f.id
             };
           })
         ];
@@ -122,7 +122,7 @@ const toSearchModal = (data, actions) => {
       }
       const items = () => { 
         return this.mons.map((mon) => {
-          const to_url = () => data.toFormPngUrl(mon.id);
+          const to_url = () => data.toFormPngUrl(mon.mon_id);
           const no_form = () => mon.id === null;
           const img = toTag('img')``({
             src: () => {

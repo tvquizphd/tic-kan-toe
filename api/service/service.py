@@ -1,13 +1,11 @@
 from urllib.parse import urlparse
+from util import to_form_generations
+from util import to_form_regions
+from util import id_from_url
 import requests
 import logging
 import json
 import time
-
-# TODO redundant in config.py
-def id_from_url(url):
-    split_url = urlparse(url).path.split('/')
-    return int([s for s in split_url if s][-1])
 
 def get_api(root, endpoint, unsure=False):
     headers = {'content-type': 'application/json'}
@@ -75,48 +73,24 @@ def str_dist(guess, target):
 
     return found 
 
-def format_form(v, generation):
-    pid = id_from_url(v['url'])
-    form = {
-        'name': v['name'], 'id': pid,
-        'generation': generation,
-    }
-    return { 'form': form }
-
-def format_pkmn(p):
-    varieties = [v['pokemon'] for v in p.get('varieties', [])]
-    gen = p['generation']
-    forms = [
-        format_form(v, gen)['form'] for v in varieties
-    ]
+def format_mon(mon, forms):
     pokemon = {
         'forms': forms,
-        'name': p['name'],
-        'dex': p['id']
+        'name': mon.name,
+        'dex': mon.id 
     }
     return { 'pokemon': pokemon }
 
 def clamp(v, low, high):
     return min(high, max(low, v))
 
-def to_min_region_gen(region_dict):
-    has_regions = (
-        region_dict and len(region_dict)
-    )
-    return (
-        min(region_dict.values())
-        if has_regions else -1
-    )
-
 class Service():
     def __init__(self, config):
-        self.mon_dict = {
-            gen: {
-                i:v for i,v in enumerate(config.mon_list,1)
-                if to_min_region_gen(v[2]) <= gen
-            }
-            for gen in config.generations
-        }
+        by_game_group = config.dex_map.by_game_group
+        self.form_mon_dict = config.form_mon_dict
+        self.gen_form_dict = config.gen_form_dict
+        self.gen_mon_dict = config.gen_mon_dict
+        self.by_game_group = by_game_group
         self.generations = config.generations
         self.mon_name_dict = config.mon_name_dict
         self.type_combos = config.type_combos
@@ -152,6 +126,7 @@ class Service():
             ver_id = id_from_url(ver_info['url'])
             ver = get_api(root, f'/version-group/{ver_id}')
             version_list.append(tuple([
+                ver_id,
                 id_from_url(ver["generation"]["url"]), [
                     id_from_url(dex["url"]) 
                     for dex in ver["pokedexes"]
@@ -162,56 +137,60 @@ class Service():
             print('Adding', ver['name'])
         return version_list
 
-    def run_test(self, identifier, fns):
-        root = self.api_url
-        pkmn = get_api(root, f'pokemon/{identifier}/')
-        dexn = id_from_url(pkmn["species"]["url"])
+    def run_test(self, form_id, fns):
+        if form_id is None:
+            return { 'ok': False }
         # Maximum maximum generation
         max_gen = max(self.generations)
-        _, combo_ids, region_dict = (
-            self.mon_dict[max_gen][dexn]
-        )
-        valid_conditions = []
-        # All type conditions
-        type_combo = list(
-            self.type_combos[combo_ids[0]]
-        )
-        valid_conditions += type_combo
-        # Monotype condition
-        if len(type_combo) == 1:
-            valid_conditions.append(self.MONO)
-        # Original region condition
-        valid_conditions += (
-            list(region_dict.keys())
-            if len(region_dict) else []
-        )
+        form = self.get_form(form_id, max_gen)
+        # Form type conditions
+        types = self.type_combos[form.type_combo]
+        ok_criteria = [
+            t for t in types
+        ] + [
+            self.MONO for _ in [ types ]
+            if len(types) == 1
+        ]
+        # First region condition
+        ok_criteria += list(
+            to_form_regions(self.by_game_group, form, 'SOME')
+        )[:1]
         # Evaluate against valid conditions
         ok = all([
-            fn(s, valid_conditions) for (s, fn) in fns
+            fn(s, ok_criteria) for (s, fn) in fns
         ])
         if ok:
-            ok_str = ','.join(valid_conditions)
-            print(f'{pkmn["name"]}: {ok_str}')
+            mon = self.form_mon_dict[form.form_id]
+            ok_str = ','.join(ok_criteria)
+            print(f'{form.name}: {ok_str}')
         return { 'ok': ok }
 
-    def parse_forms(self, pkmn):
-        varieties = [
-            v['pokemon'] for v in pkmn.get('varieties', [])
-        ]
-        gens = self.generations
-        # Find pokemon regions dict
-        mon = self.mon_dict[max(gens)][
-            int(pkmn['id'])
-        ]
-        gen = to_min_region_gen(mon[2])
-        return [
-            format_form(v, gen) for v in varieties
-        ]
+    def get_mon(self, dexn, gen=None):
+        max_gen = gen if gen else max(self.generations)
+        try:
+            return self.gen_mon_dict[max_gen][dexn]
+        except KeyError as e:
+            print(e)
+            return None
 
-    def get_forms(self, dexn):
-        root = self.api_url
-        pkmn = get_api(root, f'pokemon-species/{dexn}/', True)
-        return pkmn, self.parse_forms(pkmn)
+    def get_full_forms(self, dexn, gen=None):
+        mon = self.get_mon(dexn, gen)
+        if not mon: return None, []
+        full_forms = [
+            {
+                'name': form.name,
+                'id': form.form_id,
+                'mon_id': form.mon_id,
+                'generation': min(to_form_generations(
+                    self.by_game_group, form, 'SOME'
+                )),
+            }
+            for form in mon.forms
+        ]
+        return mon, full_forms
+
+    def get_form(self, form_id, max_gen):
+        return self.gen_form_dict[max_gen][form_id]
 
     def get_matches(self, raw_guess, max_gen):
 
@@ -232,7 +211,7 @@ class Service():
             key=lambda k: quality(*str_dist(guess, self.mon_name_dict[k]))
         )
         # List of all other pokemon
-        full_dex = set(self.mon_dict[max_gen].keys())
+        full_dex = set(self.gen_mon_dict[max_gen].keys())
         etc = list(full_dex - set(two))
         # Sort other pokemon less exactly
         other = sorted(
@@ -244,12 +223,17 @@ class Service():
         # Examples of trigrams:
         # common: cha, mag, dra, iro
 
+        # Expansion TODO:
+        # Possible to use n_partial in the future,
+        # if more specific client-side requests are
+        # needed per each form than stored in database
+        # 
         # Few matches for short strings
-        n_fetches, n_partial = (1, 3)
+        n_fetches, n_partial = (3, 0)
         # More matches for long strings 
         if n_chars > 3:
-            n_fetches = clamp(len(three), 2, 5)
-            n_partial = clamp(len(two), 2, 10)
+            n_fetches = clamp(len(three), 5, 10)
+            #n_partial = clamp(len(two), 2, 10)
         
         root = self.api_url
         # Fetch some favored pokemon
@@ -257,32 +241,19 @@ class Service():
             if not len(favored): break
             dexn = favored[0]
             favored.pop(0)
-            pkmn, forms = self.get_forms(dexn)
-            out.append({
-                'name': pkmn['name'],
-                'id': pkmn['id'],
-                'forms': forms,
-                'generation': id_from_url(
-                    pkmn['generation']['url']
-                )
-            })
+            mon, formated_forms = (
+                self.get_full_forms(dexn, max_gen)
+            )
+            if mon: out.append((mon, formated_forms))
 
         # Pad out results with other partial matches
         for dexn in (favored + other)[:n_partial]:
-            name, _, region_dict = (
-                self.mon_dict[max_gen][dexn]
-            )
-            gen = (
-                min(region_dict.values())
-                if len(region_dict) else -1
-            )
-            pkmn = { 
-                'name': name, 'id': dexn,
-                'generation': gen
-            }
-            out.append(pkmn)
+            mon = self.get_mon(dexn, max_gen)
+            if mon: out.append((mon, []))
         
-        return [format_pkmn(p) for p in out]
+        return [
+            format_mon(mon, forms) for mon, forms in out
+        ]
 
 
 def to_service(config):
