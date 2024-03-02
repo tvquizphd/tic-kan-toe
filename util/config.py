@@ -18,8 +18,10 @@ import json
 import csv
 
 CONFIG = {
-    'ENV': 'env.json',
-    'EXTRA_FORM_NAMES': 'extra-form-names.env.csv'
+    'MAIN_ENV': 'main.env.json',
+    'GAMES': 'game-list.config.json',
+    'TYPES': 'type-combos.config.json',
+    'FORM_NAMES': 'extra-form-names.env.csv'
 }
 MONO = 'monotype'
 
@@ -221,9 +223,23 @@ def fill_gen_dicts(**kwargs):
                 gen_dict[form.form_id] = form
     return kwargs
 
+def read_type_combos():
+    try:
+        with open(CONFIG['TYPES'], 'r') as f:
+            return json.loads(f.read())
+    except FileNotFoundError:
+        return []
+
+def read_game_list():
+    try:
+        with open(CONFIG['GAMES'], 'r') as f:
+            return json.loads(f.read())
+    except FileNotFoundError:
+        return []
+
 def read_mon_list():
     try:
-        with open(CONFIG['ENV'], 'r') as f:
+        with open(CONFIG['MAIN_ENV'], 'r') as f:
             kwargs = json.loads(f.read())
             return kwargs['mon_list']
     except FileNotFoundError:
@@ -231,7 +247,7 @@ def read_mon_list():
 
 def read_extra_form_names():
     try:
-        with open(CONFIG['EXTRA_FORM_NAMES'], 'r') as f:
+        with open(CONFIG['FORM_NAMES'], 'r') as f:
             form_reader = csv.reader(f, delimiter=',')
             for index,name in form_reader:
                 yield int(index), name
@@ -241,12 +257,16 @@ def read_extra_form_names():
 
 @lru_cache()
 def to_config():
+    type_combos = list(read_type_combos())
+    game_list = list(read_game_list())
     extra_form_name_dict = dict()
     for form_id, name in read_extra_form_names():
         extra_form_name_dict[form_id] = name
 
-    with open(CONFIG['ENV'], 'r') as f:
+    with open(CONFIG['MAIN_ENV'], 'r') as f:
         kwargs = json.loads(f.read())
+        kwargs['game_list'] = game_list
+        kwargs['type_combos'] = type_combos
         kwargs['extra_form_name_dict'] = extra_form_name_dict
         dex_map = to_dex_map(kwargs['game_list'])
         generations = sorted(list(
@@ -291,13 +311,21 @@ def to_config():
         )
 
 def set_config(**kwargs):
-    form_name_list = [*kwargs['form_name_list']]
-    del kwargs['form_name_list']
-    with open(CONFIG['EXTRA_FORM_NAMES'], 'w') as f:
+    extra_form_names = [*kwargs['extra_form_names']]
+    type_combos = [*kwargs['type_combos']]
+    game_list = [*kwargs['game_list']]
+    del kwargs['extra_form_names']
+    del kwargs['type_combos']
+    del kwargs['game_list']
+    with open(CONFIG['TYPES'], 'w') as f:
+        f.write(json.dumps(type_combos)) 
+    with open(CONFIG['GAMES'], 'w') as f:
+        f.write(json.dumps(game_list)) 
+    with open(CONFIG['FORM_NAMES'], 'w') as f:
         form_writer = csv.writer(f, delimiter=',')
-        for form_id, name in form_name_list:
+        for form_id, name in extra_form_names:
             form_writer.writerow([form_id, name])
-    with open(CONFIG['ENV'], 'w') as f:
+    with open(CONFIG['MAIN_ENV'], 'w') as f:
         f.write(json.dumps(kwargs)) 
 
 class Ports(BaseModel):
