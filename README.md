@@ -12,9 +12,7 @@ pip install cryptography==42.0.3
 pip install websockets==12.0
 pip install fastapi==0.103
 pip install uvicorn==0.23
-pip install python-dotenv==1
 pip install pydantic==1.10
-pip install pypokedex
 ```
 
 With Anaconda...
@@ -28,8 +26,6 @@ conda activate tic-kan-toe
 conda install fastapi=0
 conda install uvicorn=0
 conda install pydantic=1
-conda install python-dotenv=1
-pip install pypokedex==1
 ```
 
 ## HTTPS

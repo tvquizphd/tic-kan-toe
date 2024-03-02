@@ -149,7 +149,9 @@ def get_forms(mon_id, type_combos, api_url):
     ]
 
 def get_mon(dexn, dex_map, type_combos, api_url):
-    pkmn = get_api(api_url, f'pokemon-species/{dexn}/')
+    pkmn = get_api(api_url, f'pokemon-species/{dexn}/', True)
+    if not pkmn:
+        raise ValueError(f'No pokemon #{dexn} found')
     forms = [
         form 
         for v in pkmn.get('varieties', [])
@@ -170,7 +172,7 @@ def yield_alt_forms(mon):
 
 def describe_mon(dexn, dex_map, type_combos, api_url, todo=False):
     mon = get_mon(dexn, dex_map, type_combos, api_url)
-    return package_mon(mon), list(yield_alt_forms(mon))
+    return mon.name, package_mon(mon), list(yield_alt_forms(mon))
 
 
 def to_ngrams(dex_map, mons):

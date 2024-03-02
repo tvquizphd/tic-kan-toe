@@ -1,4 +1,3 @@
-from pypokedex.exceptions import PyPokedexHTTPError
 from util import set_config 
 from util import describe_mon
 from util import describe_type_combos
@@ -10,7 +9,6 @@ from argparse import ArgumentParser
 from api.service import Service 
 from models import to_dex_map
 from pathlib import Path
-import pypokedex as dex
 
 import requests
 import asyncio
@@ -110,19 +108,18 @@ if __name__ == "__main__":
     while True:
         try:
             dexn = len(mon_list) + 1
-            pkmn = dex.get(dex=(dexn))
-            new_mon, extra_forms = (
+            name, mon, extra_forms = (
                 describe_mon(dexn, dex_map, type_combos, api_url,todo=True)
             )
-            mon_list.append(new_mon)
+            mon_list.append(mon)
             extra_form_names += extra_forms
-            print(f'New: Pokémon #{dexn} {pkmn.name}')
+            print(f'New: Pokémon #{dexn} {name}')
             if not len(extra_forms): continue
             print(
                 ', '.join([f[1] for f in extra_forms[:2]]),
                 '...' if len(extra_forms) > 2 else ''
             )
-        except PyPokedexHTTPError:
+        except ValueError:
             break
 
     # Full range of the generations
