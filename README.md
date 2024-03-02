@@ -1,32 +1,25 @@
 ## Tic Kan Toe
 
-Install anaconda [on Linux](https://docs.anaconda.com/anaconda/install/linux/), [on MacOS](https://docs.anaconda.com/anaconda/install/mac-os/), or [on Windows](https://docs.anaconda.com/anaconda/install/windows/).
-
-On Ubuntu Linux without anaconda...
+On Ubuntu with Python venv:
 
 ```
 sudo apt install python3-pip python3.10-venv certbot -y
 python3 -m venv tic-kan-toe
+pip install -r requirements.txt
 source tic-kan-toe/bin/activate
-pip install cryptography==42.0.3
-pip install websockets==12.0
-pip install fastapi==0.103
-pip install uvicorn==0.23
-pip install pydantic==1.10
 ```
 
-With Anaconda...
+Alternative with Anaconda
 
 ```
 conda update -n base -c defaults conda
-conda update conda
-
-conda create -n tic-kan-toe python=3.11
+conda create -n tic-kan-toe python=3.10
+conda env update --file environment.yaml --prune
 conda activate tic-kan-toe 
-conda install fastapi=0
-conda install uvicorn=0
-conda install pydantic=1
 ```
+
+You should be able to install anaconda [on Linux](https://docs.anaconda.com/anaconda/install/linux/), [on MacOS](https://docs.anaconda.com/anaconda/install/mac-os/), or [on Windows](https://docs.anaconda.com/anaconda/install/windows/).
+
 
 ## HTTPS
 
