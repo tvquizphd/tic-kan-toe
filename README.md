@@ -5,8 +5,8 @@ On Ubuntu with Python venv:
 ```
 sudo apt install python3-pip python3.10-venv certbot -y
 python3 -m venv tic-kan-toe
-pip install -r requirements.txt
 source tic-kan-toe/bin/activate
+pip install -r requirements.txt
 ```
 
 Alternative with Anaconda
