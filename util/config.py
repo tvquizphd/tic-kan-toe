@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from functools import lru_cache
 from typing import Dict, List
 from typing import Optional, Union
-from models import unpackage_mon
-from models import package_mon
+from models import unpackage_mon_list
+from models import package_form_lists
 from models import to_dex_map
 from models import to_form
 from models import to_mon
@@ -21,6 +21,8 @@ CONFIG = {
     'MAIN_ENV': 'main.env.json',
     'GAMES': 'game-list.config.json',
     'TYPES': 'type-combos.config.json',
+    'FORM_INDEX': 'form-index-list.env.csv',
+    'FORM_COUNT': 'form-count-list.env.csv',
     'FORM_NAMES': 'extra-form-names.env.csv'
 }
 MONO = 'monotype'
@@ -186,7 +188,7 @@ def yield_alt_forms(mon):
 
 def describe_mon(dexn, dex_map, type_combos, api_url, todo=False):
     mon = get_mon(dexn, dex_map, type_combos, api_url)
-    return mon.name, package_mon(mon), list(yield_alt_forms(mon))
+    return mon.name, mon, list(yield_alt_forms(mon))
 
 
 def to_ngrams(dex_map, mons):
@@ -253,45 +255,58 @@ def read_game_list():
     except FileNotFoundError:
         return []
 
-def read_mon_list():
+def read_form_index_list():
     try:
-        with open(CONFIG['MAIN_ENV'], 'r') as f:
-            kwargs = json.loads(f.read())
-            return kwargs['mon_list']
-    except FileNotFoundError:
-        return []
-
-def read_extra_form_names():
-    try:
-        with open(CONFIG['FORM_NAMES'], 'r') as f:
+        with open(CONFIG['FORM_INDEX'], 'r') as f:
             form_reader = csv.reader(f, delimiter=',')
-            for index,name in form_reader:
-                yield int(index), name
+            for value in form_reader:
+                yield from [int(v) for v in value]
     except FileNotFoundError:
         pass
 
+def read_form_count_list():
+    try:
+        with open(CONFIG['FORM_COUNT'], 'r') as f:
+            form_reader = csv.reader(f, delimiter=',')
+            for name,count in form_reader:
+                yield name, int(count)
+    except FileNotFoundError:
+        pass
+
+def read_extra_form_name_dict():
+    def read_list():
+        try:
+            with open(CONFIG['FORM_NAMES'], 'r') as f:
+                form_reader = csv.reader(f, delimiter=',')
+                for index,name in form_reader:
+                    yield int(index), name
+        except FileNotFoundError:
+            pass
+    return {
+        form_id: name for form_id, name in read_list()
+    }
 
 @lru_cache()
 def to_config():
     type_combos = list(read_type_combos())
     game_list = list(read_game_list())
-    extra_form_name_dict = dict()
-    for form_id, name in read_extra_form_names():
-        extra_form_name_dict[form_id] = name
+    
+    # All mons with their forms
+    mons = list(unpackage_mon_list(
+        list(read_form_count_list()),
+        list(read_form_index_list()),
+        read_extra_form_name_dict()
+    ))
 
     with open(CONFIG['MAIN_ENV'], 'r') as f:
         kwargs = json.loads(f.read())
         kwargs['game_list'] = game_list
         kwargs['type_combos'] = type_combos
-        kwargs['extra_form_name_dict'] = extra_form_name_dict
         dex_map = to_dex_map(kwargs['game_list'])
         generations = sorted(list(
             dex_map.by_generation.keys()
         ))
-        mons = [
-            unpackage_mon(packaged, extra_form_name_dict)
-            for packaged in kwargs['mon_list']
-        ]
+
         # All forms and mons per all max generations
         kwargs["gen_form_dict"] = {
             gen: dict() for gen in generations
@@ -327,22 +342,43 @@ def to_config():
         )
 
 def set_config(**kwargs):
-    extra_form_names = [*kwargs['extra_form_names']]
+    extra_form_name_dict = {
+        **kwargs['extra_form_name_dict']
+    }
     type_combos = [*kwargs['type_combos']]
     game_list = [*kwargs['game_list']]
-    del kwargs['extra_form_names']
+    mon_list = [*kwargs['mon_list']]
+    del kwargs['extra_form_name_dict']
     del kwargs['type_combos']
     del kwargs['game_list']
+    del kwargs['mon_list']
+
+    form_index_list, form_count_list = (
+        package_form_lists(mon_list)
+    )
+
     with open(CONFIG['TYPES'], 'w') as f:
         f.write(json.dumps(type_combos)) 
     with open(CONFIG['GAMES'], 'w') as f:
         f.write(json.dumps(game_list)) 
+
     with open(CONFIG['FORM_NAMES'], 'w') as f:
-        form_writer = csv.writer(f, delimiter=',')
-        for form_id, name in extra_form_names:
-            form_writer.writerow([form_id, name])
+        writer = csv.writer(f, delimiter=',')
+        sorted_form_ids = sorted(list(
+            extra_form_name_dict.keys()
+        ))
+        for form_id in sorted_form_ids:
+            name = extra_form_name_dict[form_id]
+            writer.writerow([form_id, name])
+    with open(CONFIG['FORM_INDEX'], 'w') as f:
+        writer = csv.writer(f, delimiter=',')
+        writer.writerow(form_index_list)
+    with open(CONFIG['FORM_COUNT'], 'w') as f:
+        writer = csv.writer(f, delimiter=',')
+        for name, form_count in form_count_list:
+            writer.writerow([name, form_count])
     with open(CONFIG['MAIN_ENV'], 'w') as f:
-        f.write(json.dumps(kwargs)) 
+        f.write(json.dumps(kwargs))
 
 class Ports(BaseModel):
     client: int
@@ -366,12 +402,10 @@ class Config(BaseSettings):
     valid_combos: Dict[int, Types]
     generations: List[int]
     type_combos: Types 
-    extra_form_name_dict: Dict[int, str]
     gen_form_dict: Dict[int, Dict[int, Form]]
     gen_mon_dict: Dict[int, Dict[int, Mon]]
     form_mon_dict: Dict[int, Mon]
     game_list: PackagedGames
-    mon_list: PackagedMons 
     mons: List[Mon]
     dex_map: DexMap
     ports: Ports

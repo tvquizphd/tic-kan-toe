@@ -167,18 +167,18 @@ class Service():
             print(f'{form.name}: {ok_str}')
         return { 'ok': ok }
 
-    def get_mon(self, dexn, gen=None):
-        max_gen = gen if gen else max(self.generations)
+    def get_mon(self, dexn, max_gen):
         try:
             return self.gen_mon_dict[max_gen][dexn]
         except KeyError as e:
             print(e)
             return None
 
-    def get_full_forms(self, dexn, gen=None):
-        mon = self.get_mon(dexn, gen)
+    def get_forms(self, dexn, gen=None):
+        max_gen = gen or max(self.generations)
+        mon = self.get_mon(dexn, max_gen)
         if not mon: return None, []
-        full_forms = [
+        filtered_forms = [
             {
                 'name': form.name,
                 'id': form.form_id,
@@ -187,9 +187,11 @@ class Service():
                     self.by_game_group, form, 'SOME'
                 )),
             }
-            for form in mon.forms
+            for form in mon.forms if (
+                form.form_id in self.gen_form_dict[max_gen]
+            )
         ]
-        return mon, full_forms
+        return mon, filtered_forms
 
     def get_form(self, form_id, max_gen):
         return self.gen_form_dict[max_gen][form_id]
@@ -244,7 +246,7 @@ class Service():
             dexn = favored[0]
             favored.pop(0)
             mon, formated_forms = (
-                self.get_full_forms(dexn, max_gen)
+                self.get_forms(dexn, max_gen)
             )
             if mon: out.append((mon, formated_forms))
 

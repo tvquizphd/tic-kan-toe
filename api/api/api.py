@@ -125,8 +125,8 @@ def get_forms(
     ):
     if not dexn:
         return []
-    _, full_forms = to_service(config).get_full_forms(dexn)
-    return full_forms
+    _, forms = to_service(config).get_forms(dexn)
+    return forms
 
 @pd_api.get("/api/matches")
 def get_matches(

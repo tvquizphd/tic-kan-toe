@@ -1,10 +1,12 @@
 from util import set_config 
 from util import describe_mon
 from util import describe_type_combos
-from util import read_extra_form_names
+from util import read_extra_form_name_dict
+from util import read_form_count_list
+from util import read_form_index_list
 from util import read_type_combos
 from util import read_game_list
-from util import read_mon_list
+from models import unpackage_mon_list
 from argparse import ArgumentParser
 from api.service import Service 
 from models import to_dex_map
@@ -17,13 +19,6 @@ import signal
 import sys
 import ssl
 
-PORTS = {
-    "client": 3134,
-    "api": 3134 + 1
-}
-
-API_PORT = PORTS['api']
-CLIENT_PORT = PORTS['client']
 CERT_ROOT = Path('/etc/letsencrypt/live/')
 
 parser = ArgumentParser(
@@ -31,8 +26,10 @@ parser = ArgumentParser(
                     description='Test of Tic Kan Toe API',
                     epilog=f'Using the PokéAPI')
 parser.add_argument('--cert-name', type=str)
+parser.add_argument('--ui-port', type=int, default=3134)
 
 def to_server(pem_path, port, module, scope, log_level):
+    print(f'Running {scope} {module} on port {port}')
     uvicorn_config = {
         "port": port,
         "reload": True,
@@ -66,14 +63,14 @@ async def run_server(server):
     await server.serve()
 
 
-async def run_tasks(pem_path):
+async def run_tasks(ports, pem_path):
 
     loop = asyncio.get_event_loop()
     api_server = to_server(
-        pem_path, API_PORT, 'api', 'pd', 'info'
+        pem_path, ports['api'], 'api', 'pd', 'info'
     )
     client_server = to_server(
-        pem_path, CLIENT_PORT, 'client', 'pd', 'error'
+        pem_path, ports['client'], 'client', 'pd', 'error'
     )
     api_task = asyncio.ensure_future(run_server(api_server))
     client_task = asyncio.ensure_future(run_server(client_server))
@@ -97,6 +94,7 @@ def types_changed(old_type_combos, type_combos):
 
 if __name__ == "__main__":
 
+    args = parser.parse_args()
     api_url = 'https://pokeapi.co/api/v2/'
 
     print('Updating Games...', flush=True, file=sys.stderr)
@@ -105,18 +103,27 @@ if __name__ == "__main__":
     )
     old_type_combos = list(read_type_combos())
     type_combos = describe_type_combos(api_url)
-    extra_form_names = list(read_extra_form_names())
-    mon_list = list(read_mon_list())
+    extra_form_name_dict = (
+        read_extra_form_name_dict()
+    )
+    mon_list = list(unpackage_mon_list(
+        list(read_form_count_list()),
+        list(read_form_index_list()),
+        extra_form_name_dict
+    ))
 
     # Must clear all Pokémon if new type introduced
     if types_changed(old_type_combos, type_combos):
         print('Wow! Found new types!')
         mon_list = []
-    args = parser.parse_args()
     pem_path = (
         CERT_ROOT / args.cert_name
         if args.cert_name else None
     )
+    ports = {
+        'client': args.ui_port,
+        'api': args.ui_port + 1
+    }
 
     print('Updating Pokémon...', flush=True, file=sys.stderr)
     dex_map = to_dex_map(game_list)
@@ -128,25 +135,27 @@ if __name__ == "__main__":
                 describe_mon(dexn, dex_map, type_combos, api_url,todo=True)
             )
             mon_list.append(mon)
-            extra_form_names += extra_forms
-            print(f'New: Pokémon #{dexn} {name}')
+            print(f'Loaded Pokémon #{dexn} {name}')
+            for form_id, name in extra_forms:
+                extra_form_name_dict[form_id] = name
             if not len(extra_forms): continue
             print(
+                'Forms:',
                 ', '.join([f[1] for f in extra_forms[:2]]),
                 '...' if len(extra_forms) > 2 else ''
             )
         except ValueError:
             break
 
-    # Full range of the generations
+    # Homepage defaults to only gen 1
     default_max_gen = 1
     set_config(**{
-        'ports': PORTS, 'api_url': api_url,
+        'ports': ports, 'api_url': api_url,
         'default_max_gen': default_max_gen,
         'game_list': game_list, 'mon_list': mon_list,
-        'extra_form_names': extra_form_names,
+        'extra_form_name_dict': extra_form_name_dict,
         'type_combos': type_combos,
     })
 
     # Test the API
-    asyncio.run(run_tasks(pem_path))
+    asyncio.run(run_tasks(ports, pem_path))

@@ -189,7 +189,14 @@ const verify_online = (online, ws_send) => {
 }
 
 const create_online = (online, opts, ws_send) => {
-  const user_id = crypto.randomUUID();
+  let user_id = Math.random().toString().slice(2,11);
+  // Use uuid when in https secure context
+  try {
+    user_id = crypto.randomUUID();
+  }
+  catch (e) {
+    console.error(e);
+  }
   return verify_online({
     ...online, ...opts,
     user_id, is_on: false,
@@ -281,8 +288,12 @@ const initialize = async (api_root, ws_send, details={}) => {
 
 const main = async (api_port) => {
   const host = window.location.hostname;
-  const api_root = `https://${host}:${api_port}`;
-  const ws_url = `wss://${host}:${api_port}/ws`;
+  const _s = ['','s'][+(
+    window.location.protocol === 'https:'
+    || window.isSecureContext
+  )];
+  const api_root = `http${_s}://${host}:${api_port}`;
+  const ws_url = `ws${_s}://${host}:${api_port}/ws`;
   let ws = new WebSocket(ws_url);
   const add_ws_events = () => {
     ws.onopen = () => {
