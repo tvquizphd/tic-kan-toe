@@ -1,5 +1,7 @@
 ## Tic Kan Toe
 
+You may run both client and API together with `python test.py`. First, install required dependencies with either `venv` or `conda`:
+
 On Ubuntu with Python venv:
 
 ```
