@@ -5,7 +5,7 @@ You may run both client and API together with `python test.py`. First, install r
 On Ubuntu with Python venv:
 
 ```
-sudo apt install python3-pip python3.10-venv certbot -y
+sudo apt install python3-pip python3.10-venv
 python3 -m venv tic-kan-toe
 source tic-kan-toe/bin/activate
 pip install -r requirements.txt
@@ -24,6 +24,8 @@ You should be able to install anaconda [on Linux](https://docs.anaconda.com/anac
 
 
 ## HTTPS
+
+Install certbot with `sudo apt install certbot -y`, then follow one of two approaches:
 
 ### Recommended DNS challenge
 
