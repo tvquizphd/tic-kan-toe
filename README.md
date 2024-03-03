@@ -1,6 +1,6 @@
 ## Tic Kan Toe
 
-### Run demo with HTTPS
+### Run demo without HTTPS
 
 This command runs the client and API server. Any missing data will be cached before serving.
 
