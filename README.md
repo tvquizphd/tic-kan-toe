@@ -1,6 +1,14 @@
 ## Tic Kan Toe
 
-You may run both client and API together with `python test.py`. First, install required dependencies with either `venv` or `conda`:
+### Run demo with HTTPS
+
+This command runs the client and API server. Any missing data will be cached before serving.
+
+```
+python test.py
+```
+
+To run the above, install required dependencies with either `venv` or `conda`:
 
 On Ubuntu with Python venv:
 
@@ -55,11 +63,29 @@ You may now close port `80`. Also, `sudo ufw status numbered` and `sudo ufw dele
 
 **Note**: these instructions were insufficiently tested, due to rate limiting.
 
-### Run demo
+
+### Certfiicate permissions
+
+You may add your own user to a group that may read your server's private key.
+
+```
+sudo addgroup tkt && sudo adduser $USER tkt
+sudo chown -R root:tkt /etc/letsencrypt/live
+sudo chown -R root:tkt /etc/letsencrypt/archive
+sudo chmod g+x /etc/letsencrypt/live
+sudo chmod g+x /etc/letsencrypt/archive
+sudo chmod g+r /etc/letsencrypt/live/owl/privkey.pem
+```
+
+Log out then log in, (ie, with SSH). Now, run `test.py` as your user, without root.
+
+### Run demo with HTTPS
+
+The `--cert-name` references the certificate we have created.
 
 ```
 source tic-kan-toe/bin/activate
-sudo env "PATH=$PATH VIRTUAL_ENV=$VIRTUAL_ENV" python test.py
+python test.py --cert-name owl
 ```
 
 ### Scripts
