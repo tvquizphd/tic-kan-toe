@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 from util import to_form_generations
-from util import to_form_regions
+from util import to_form_region_no_gimicks
 from util import id_from_url
 import requests
 import logging
@@ -145,6 +145,7 @@ class Service():
         form = self.get_form(form_id, max_gen)
         # Form type conditions
         types = self.type_combos[form.type_combo]
+        mon = self.form_mon_dict[form.form_id]
         ok_criteria = [
             t for t in types
         ] + [
@@ -152,15 +153,16 @@ class Service():
             if len(types) == 1
         ]
         # First region condition
-        ok_criteria += list(
-            to_form_regions(self.by_game_group, form, 'SOME')
-        )[:1]
+        ok_criteria += [
+            to_form_region_no_gimicks(
+                mon, self.by_game_group, form, 'SOME'
+            )
+        ]
         # Evaluate against valid conditions
         ok = all([
             fn(s, ok_criteria) for (s, fn) in fns
         ])
         if ok:
-            mon = self.form_mon_dict[form.form_id]
             ok_str = ','.join(ok_criteria)
             print(f'{form.name}: {ok_str}')
         return { 'ok': ok }

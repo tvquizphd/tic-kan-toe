@@ -5,8 +5,8 @@ from .config import describe_type_combos
 
 from .config import id_from_url
 from .config import to_generations
-from .config import to_form_regions
 from .config import to_form_generations
+from .config import to_form_region_no_gimicks
 from .config import read_extra_form_names
 from .config import read_type_combos
 from .config import read_game_list

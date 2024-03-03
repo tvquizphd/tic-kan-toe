@@ -44,6 +44,25 @@ def to_form_generations(*args):
 def to_form_regions(*args):
     return to_form_data(*(args+('regions',)))
 
+def to_form_region_no_gimicks(
+    mon, by_game_group, form, quantifier
+):
+    gimicks = ['mega', 'primal', 'origin', 'gmax']
+    args = [by_game_group, form, quantifier]
+    has_gimick = (
+        any([
+            True for part in form.name.split('-')
+            if part in gimicks
+        ])
+    )
+    # Gimick is from their original region
+    if has_gimick: args[1] = mon.forms[0]
+    regions = list(to_form_regions(*args))
+    # TODO -- games with two regions
+    # -- disambiguate somehow
+    # -- only occurs with kanto-johto
+    return regions[-1]
+
 def to_generations(by_game_group, mon, quantifier):
     for form in mon.forms:
         yield from to_form_generations(
@@ -72,35 +91,30 @@ def to_valid_combos(mons, dex_map, type_combos):
 
     for mon in mons:
         for form in mon.forms:
-            # Treat gimics as from their original games 
-            gimics = ['mega', 'primal', 'origin', 'gmax']
-            og_form = mon.forms[0] if (
-                len([
-                    None for part in form.name.split('-')
-                    if part in gimics
-                ])
-            ) else form
-            gens = list(to_form_generations(by_game_group, og_form, 'SOME'))
-            regions = list(to_form_regions(by_game_group, og_form, 'SOME'))
-            if not len(gens) or not len(regions):
-                continue
-            combo =(type_combos[form.type_combo])
+            # All pokemon forms treated as from own generation
+            # But we treat gimicks as from their original regions 
+            gens = list(to_form_generations(by_game_group, form, 'SOME'))
+            if not len(gens): continue
+            first_region = to_form_region_no_gimicks(
+                mon, by_game_group, form, 'SOME'
+            )
+            combo = type_combos[form.type_combo]
             types = list(set(combo))
-            # Pair any type with first region
-            first_region = regions[0]
-            grid_pairs = [
-              tuple(sorted([first_region,t]))
+            # Form has pair of types
+            grid_pairs = (
+                [tuple(combo)] if len(combo) == 2 else []
+            )
+            # Form has its types in its first region
+            grid_pairs += [
+              tuple(sorted([first_region, t]))
               for t in types
-            ] + [
-                tuple(sorted(c)) for c in [combo]
-                if len(c) == 2
-            ] + [
-                tuple(sorted(
-                    [v, MONO]
-                )) for c in [combo]
-                for v in [*regions, c[0]]
-                if len(c) == 1
-            ]
+            ] 
+            # Form has monotype
+            if len(combo) == 1:
+                grid_pairs += [
+                    tuple(sorted([combo[0], MONO])),
+                    tuple(sorted([first_region, MONO]))
+                ]
             # Find first generation of pair
             all_gens = list(by_generation.keys())
             gen_limit = max(all_gens) + 1
