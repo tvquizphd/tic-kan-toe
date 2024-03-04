@@ -1,3 +1,4 @@
+*.env.base15
 *.env.json
 *.env.csv
 .DS_Store

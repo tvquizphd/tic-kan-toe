@@ -10,6 +10,8 @@ from models import to_form
 from models import to_mon
 from models import Mon, Form
 from models import DexMap 
+from .base15 import write_base15
+from .base15 import read_base15
 
 from urllib.parse import urlparse
 import requests
@@ -21,7 +23,7 @@ CONFIG = {
     'MAIN_ENV': 'main.env.json',
     'GAMES': 'game-list.config.json',
     'TYPES': 'type-combos.config.json',
-    'FORM_INDEX': 'form-index-list.env.csv',
+    'FORM_INDEX': 'form-index-list.env.base15',
     'FORM_COUNT': 'form-count-list.env.csv',
     'FORM_NAMES': 'extra-form-names.env.csv'
 }
@@ -257,10 +259,8 @@ def read_game_list():
 
 def read_form_index_list():
     try:
-        with open(CONFIG['FORM_INDEX'], 'r') as f:
-            form_reader = csv.reader(f, delimiter=',')
-            for value in form_reader:
-                yield from [int(v) for v in value]
+        for value in read_base15(CONFIG['FORM_INDEX']):
+            yield value
     except FileNotFoundError:
         pass
 
@@ -370,9 +370,9 @@ def set_config(**kwargs):
         for form_id in sorted_form_ids:
             name = extra_form_name_dict[form_id]
             writer.writerow([form_id, name])
-    with open(CONFIG['FORM_INDEX'], 'w') as f:
-        writer = csv.writer(f, delimiter=',')
-        writer.writerow(form_index_list)
+
+    write_base15(CONFIG['FORM_INDEX'], form_index_list)
+
     with open(CONFIG['FORM_COUNT'], 'w') as f:
         writer = csv.writer(f, delimiter=',')
         for name, form_count in form_count_list:
