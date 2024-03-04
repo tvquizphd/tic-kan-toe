@@ -25,7 +25,7 @@ CONFIG = {
     'TYPES': 'type-combos.config.json',
     'FORM_INDEX': 'form-index-list.env.base15',
     'FORM_COUNT': 'form-count-list.env.csv',
-    'FORM_NAMES': 'extra-form-names.env.csv'
+    'FORM_NAMES': 'form-name-list.env.csv'
 }
 MONO = 'monotype'
 

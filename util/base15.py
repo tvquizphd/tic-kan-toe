@@ -27,6 +27,7 @@ def read_base15(file):
             digits = []
             continue
         digits.append(nibble)
+    yield from_base15(digits)
 
 def write_base15(file, array):
     comma = int('1111', 2)

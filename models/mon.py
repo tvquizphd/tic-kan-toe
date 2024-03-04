@@ -96,7 +96,7 @@ def unpackage_mon_list(
 def unpackage_mon(name, package, extra_form_name_dict):
     # Starting indices of each chunk
     starts = list(range(0, len(package), FORM_CHUNK))
-    chunks = zip(starts, starts[1:]+[None])
+    chunks = list(zip(starts, starts[1:]+[None]))
     forms = [
         unpackage_form(
             package[slice(*pair)],
