@@ -1,6 +1,7 @@
 from pydantic import BaseSettings
 from pydantic import BaseModel
 from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List
 from typing import Optional, Union
 from models import unpackage_mon_list
@@ -20,12 +21,15 @@ import json
 import csv
 
 CONFIG = {
-    'MAIN_ENV': 'main.env.json',
-    'GAMES': 'game-list.config.json',
-    'TYPES': 'type-combos.config.json',
-    'FORM_INDEX': 'form-index-list.env.base15',
-    'FORM_COUNT': 'form-count-list.env.csv',
-    'FORM_NAMES': 'form-name-list.env.csv'
+    k: Path('data') / v for k,v in
+    ({
+        'MAIN_ENV': 'main.env.json',
+        'GAMES': 'game-list.config.json',
+        'TYPES': 'type-combos.config.json',
+        'FORM_INDEX': 'form-index-list.env.base15',
+        'FORM_COUNT': 'form-count-list.env.csv',
+        'FORM_NAMES': 'form-name-list.env.csv'
+    }).items()
 }
 MONO = 'monotype'
 
