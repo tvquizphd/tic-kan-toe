@@ -67,10 +67,10 @@ async def run_tasks(ports, pem_path):
 
     loop = asyncio.get_event_loop()
     api_server = to_server(
-        pem_path, ports['api'], 'api', 'pd', 'info'
+        pem_path, ports['api'], 'api', 'tvquiz', 'info'
     )
     client_server = to_server(
-        pem_path, ports['client'], 'client', 'pd', 'error'
+        pem_path, ports['client'], 'client', 'tvquiz', 'error'
     )
     api_task = asyncio.ensure_future(run_server(api_server))
     client_task = asyncio.ensure_future(run_server(client_server))

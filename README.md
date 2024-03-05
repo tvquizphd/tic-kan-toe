@@ -5,7 +5,7 @@
 This command runs the client and API server. Any missing data will be cached before serving.
 
 ```
-python test.py
+python main.py
 ```
 
 To run the above, install required dependencies with either `venv` or `conda`:
@@ -77,7 +77,7 @@ sudo chmod g+x /etc/letsencrypt/archive
 sudo chmod g+r /etc/letsencrypt/live/owl/privkey.pem
 ```
 
-Log out then log in, (ie, with SSH). Now, run `test.py` as your user, without root.
+Log out then log in, (ie, with SSH). Now, run `main.py` as your user, without root.
 
 ### Run demo with HTTPS
 
@@ -85,7 +85,7 @@ The `--cert-name` references the certificate we have created.
 
 ```
 source tic-kan-toe/bin/activate
-python test.py --cert-name owl
+python main.py --cert-name owl
 ```
 
 ### Scripts

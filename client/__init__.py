@@ -1,1 +1,1 @@
-from .client import pd_client
+from .client import tvquiz_client

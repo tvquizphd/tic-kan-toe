@@ -1,1 +1,1 @@
-from .api import pd_api
+from .api import tvquiz_api

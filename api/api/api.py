@@ -29,8 +29,8 @@ async def lifespan(
     # Any shutdown costs after yield
 
 # Construct API
-pd_api = FastAPI(lifespan=lifespan)
-pd_api.add_middleware(
+tvquiz_api = FastAPI(lifespan=lifespan)
+tvquiz_api.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=["*"],
@@ -41,7 +41,7 @@ pd_api.add_middleware(
 pool = ThreadPoolExecutor(max_workers=1)
 
 # Handle common FastAPI exceptions
-@pd_api.exception_handler(RequestValidationError)
+@tvquiz_api.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     content = {'status_code': 10422, 'data': None}
     print(f'{exc}'.replace('\n', ' ').replace('   ', ' '))
@@ -51,14 +51,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 TODO: Documentation for Development
 '''
 
-@pd_api.get("/api")
+@tvquiz_api.get("/api")
 def open_root_api(config=Depends(to_config)):
     return { **vars(config) }
 
 
 # Multiplayer support
 
-@pd_api.websocket("/ws")
+@tvquiz_api.websocket("/ws")
 async def websocket_endpoint(
         client: WebSocket,
         multiplayer=Depends(to_multiplayer)
@@ -89,7 +89,7 @@ async def websocket_endpoint(
 Constants
 '''
 
-@pd_api.get("/api/latest_metadata")
+@tvquiz_api.get("/api/latest_metadata")
 def get_latest_metadata(
         config=Depends(to_config),
         max_gen: int | None = None
@@ -101,7 +101,7 @@ def get_latest_metadata(
     }
 
 
-@pd_api.get("/api/valid_combos")
+@tvquiz_api.get("/api/valid_combos")
 def get_valid_combos(
         config=Depends(to_config),
         max_gen: int | None = None
@@ -119,7 +119,7 @@ def get_valid_combos(
 Pokemon forms and search
 '''
 
-@pd_api.get("/api/forms")
+@tvquiz_api.get("/api/forms")
 def get_forms(
         config=Depends(to_config), dexn: int | None = None
     ):
@@ -128,7 +128,7 @@ def get_forms(
     _, forms = to_service(config).get_forms(dexn)
     return forms
 
-@pd_api.get("/api/matches")
+@tvquiz_api.get("/api/matches")
 def get_matches(
         config=Depends(to_config), guess: str = '',
         max_gen: int | None = None
@@ -142,7 +142,7 @@ def get_matches(
 Validate guess on specific form
 '''
 
-@pd_api.get("/api/test")
+@tvquiz_api.get("/api/test")
 def run_test(
         config=Depends(to_config),
         form_id: int | None = None,
