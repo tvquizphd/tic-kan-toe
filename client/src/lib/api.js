@@ -79,9 +79,10 @@ const getRegions = async (root, max_gen=null) => {
   return out.map(v => v?.region).filter(v => v);
 }
 
-const getForms = async (root, guess) => {
+const getForms = async (root, guess, max_gen) => {
   const params = new URLSearchParams();
   params.append('dexn', guess);
+  params.append('max_gen', max_gen);
   const url = `${root}/api/forms?${params.toString()}`;
   const response = await fetchWrapper(url);
   const out = (await response.json()) || [];

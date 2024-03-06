@@ -1,8 +1,6 @@
+from typing import List
 from itertools import accumulate
 from pydantic import BaseModel
-from typing import Dict, List
-from typing import Optional
-import json
 
 class Form(BaseModel):
     game_group: int
@@ -27,10 +25,6 @@ def to_form(name, form_id, type_combo, game_group, mon_id):
 
 def to_mon(id, forms, name):
     return Mon(id=id, forms=forms, name=name)
-
-'''
-To the serialized format
-'''
 
 def package_form_lists(mon_list):
     form_index_list = []
@@ -70,10 +64,6 @@ FORM_CHUNK = len(
         )]
     ))
 )
-
-'''
-From the serialized format
-'''
 
 def unpackage_mon_list(
     form_count_list, form_index_list,

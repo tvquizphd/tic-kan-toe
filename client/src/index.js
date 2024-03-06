@@ -384,6 +384,7 @@ const main = async (api_port) => {
     tries: tries,
     modal: null,
     content: '',
+    search: '',
     cols, rows,
     gen_years,
     failures: failures,
@@ -490,6 +491,7 @@ const main = async (api_port) => {
       data.tries = tries;
       data.rows = rows;
       data.cols = cols;
+      data.search = '';
     },
     closeModal: () => {
       data.modal = null;

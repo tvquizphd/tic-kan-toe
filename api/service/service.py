@@ -1,21 +1,8 @@
 from urllib.parse import urlparse
-from util import to_form_generations
-from util import to_form_region_no_gimicks
-from util import id_from_url
-import requests
-import logging
-import json
-import time
-
-def get_api(root, endpoint, unsure=False):
-    headers = {'content-type': 'application/json'}
-    try:
-        r = requests.get(root + endpoint, headers=headers)
-        return r.json() 
-    except Exception as e:
-        if not unsure:
-            logging.critical(e, exc_info=True)
-        return None
+from util import (
+    id_from_url, to_form_generations,
+    to_form_region_no_gimmicks, get_api
+)
 
 def get_pages(root, endpoint, offset=None):
     off = f"&offset={offset}" if offset else ""
@@ -36,7 +23,7 @@ def quality(offset, n, count):
     ][+(n>0)]
     values = [is_first, count]
     ranking = zip(scales, values)
-    return sum([p*v for p,v in ranking])
+    return sum(p*v for p,v in ranking)
 
 def to_ngrams(s,n):
     for start in range(0, len(s) - n + 1):
@@ -99,23 +86,6 @@ class Service():
         self.api_url = config.api_url
         self.MONO = config.MONO
 
-    async def delete_api(self, endpoint):
-        #target = self.api_url + endpoint
-        #session.delete(target)
-        pass
-
-    async def put_api(self, endpoint, data):
-        #target = self.api_url + endpoint
-        headers = {'content-type': 'application/json'}
-        #session.put(target, json=data, headers=headers)
-        pass
-
-    async def post_api(self, endpoint, data):
-        #target = self.api_url + endpoint
-        headers = {'content-type': 'application/json'}
-        #session.post(target, json=data, headers=headers)
-        pass
-
     @staticmethod 
     def update_games(root, games):
         new_ver_list = get_pages(
@@ -146,22 +116,20 @@ class Service():
         # Form type conditions
         types = self.type_combos[form.type_combo]
         mon = self.form_mon_dict[form.form_id]
-        ok_criteria = [
-            t for t in types
-        ] + [
+        ok_criteria = list(types) + [
             self.MONO for _ in [ types ]
             if len(types) == 1
         ]
         # First region condition
         ok_criteria += [
-            to_form_region_no_gimicks(
+            to_form_region_no_gimmicks(
                 mon, self.by_game_group, form, 'SOME'
             )
         ]
         # Evaluate against valid conditions
-        ok = all([
+        ok = all(
             fn(s, ok_criteria) for (s, fn) in fns
-        ])
+        )
         if ok:
             ok_str = ','.join(ok_criteria)
             print(f'{form.name}: {ok_str}')
@@ -215,11 +183,12 @@ class Service():
             key=lambda k: quality(*str_dist(guess, self.mon_name_dict[k]))
         )
         # List of all other pokemon
-        full_dex = set(self.gen_mon_dict[max_gen].keys())
-        etc = list(full_dex - set(two))
         # Sort other pokemon less exactly
         other = sorted(
-            etc, reverse=True,
+            list(
+                set(self.gen_mon_dict[max_gen].keys()) - set(two)
+            ),
+            reverse=True,
             key=lambda k: quality(*fast_dist(guess, self.mon_name_dict[k]))
         )
 
@@ -239,7 +208,6 @@ class Service():
             n_fetches = clamp(len(three), 5, 10)
             #n_partial = clamp(len(two), 2, 10)
         
-        root = self.api_url
         # Fetch some favored pokemon
         for _ in range(n_fetches):
             if not len(favored): break

@@ -1,8 +1,7 @@
-from pydantic import BaseModel
-from typing import Dict, List
-from collections import defaultdict
 import functools
-import json
+from collections import defaultdict
+from typing import Dict, List
+from pydantic import BaseModel
 
 class Dex(BaseModel):
     regions: List[str]

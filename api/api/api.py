@@ -1,32 +1,31 @@
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY as _422
-from starlette.status import HTTP_201_CREATED as _201
-from fastapi.exceptions import RequestValidationError
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from starlette.status import (
+    HTTP_201_CREATED as _201,
+    HTTP_422_UNPROCESSABLE_ENTITY as _422
+)
+from starlette.requests import Request
 from starlette.websockets import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from concurrent.futures import ThreadPoolExecutor
-from fastapi.responses import JSONResponse
-from starlette.requests import Request
 from fastapi import Depends, FastAPI, WebSocket
-from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
 from api.service import to_service
 from util import to_multiplayer
 from util import to_config
-import asyncio
-import json
 
 @asynccontextmanager
 async def lifespan(
-    app: FastAPI
+    _app: FastAPI
 ):
     # Initialize Multiplayer
     multiplayer = to_multiplayer()
     # Any startup costs before yield
     yield
-    # Sentinal to stop Q worker 
+    # Signal to stop worker 
     multiplayer.Q.put(None)
-    print('API Server Shutdown Complete')
-    # Any shutdown costs after yield
 
 # Construct API
 tvquiz_api = FastAPI(lifespan=lifespan)
@@ -42,7 +41,7 @@ pool = ThreadPoolExecutor(max_workers=1)
 
 # Handle common FastAPI exceptions
 @tvquiz_api.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
     content = {'status_code': 10422, 'data': None}
     print(f'{exc}'.replace('\n', ' ').replace('   ', ' '))
     return JSONResponse(content=content, status_code=_422)
@@ -91,8 +90,7 @@ Constants
 
 @tvquiz_api.get("/api/latest_metadata")
 def get_latest_metadata(
-        config=Depends(to_config),
-        max_gen: int | None = None
+        config=Depends(to_config)
     ):
     return {
         'defaults': {
@@ -121,11 +119,13 @@ Pokemon forms and search
 
 @tvquiz_api.get("/api/forms")
 def get_forms(
-        config=Depends(to_config), dexn: int | None = None
+        config=Depends(to_config),
+        dexn: int | None = None,
+        max_gen: int | None = None
     ):
     if not dexn:
         return []
-    _, forms = to_service(config).get_forms(dexn)
+    _, forms = to_service(config).get_forms(dexn, max_gen)
     return forms
 
 @tvquiz_api.get("/api/matches")
@@ -149,9 +149,10 @@ def run_test(
         conditions: str = ''
     ):
     # Comparison against conditions
-    str_cmp = lambda x, y: x.lower() == y.lower()
+    def str_cmp(x,y):
+        return x.lower() == y.lower()
     fns = [
-        (s, lambda x,arr: any([str_cmp(x,y) for y in arr]))
+        (s, lambda x,arr: any(str_cmp(x,y) for y in arr))
         for s in conditions.split(',')
     ]
     return to_service(config).run_test(form_id, fns)

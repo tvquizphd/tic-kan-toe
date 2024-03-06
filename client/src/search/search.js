@@ -78,8 +78,7 @@ const toSearchModal = (data, actions) => {
       return {
         matches: JSON.stringify(data.matches),
         max_gen: data.online.max_gen,
-        updating_search: false,
-        search: '',
+        updating_search: false
       };
     }
 
@@ -114,13 +113,16 @@ const toSearchModal = (data, actions) => {
         return toTag('div')`Guess`({
           class: 'accept',
           '@click': async () => {
-            this.data.search = '';
+            data.search = '';
             await data.testGuess(mon);
             data.closeModal(); 
           }
         });
       }
       const items = () => { 
+        if (data.search == '') {
+          return [];
+        }
         return this.mons.map((mon) => {
           const to_url = () => data.toFormPngUrl(mon.mon_id);
           const no_form = () => mon.id === null;
@@ -141,11 +143,11 @@ const toSearchModal = (data, actions) => {
         class: 'results'
       });
       const search = toTag('input')``({
-        value: () => this.data.search,
+        value: () => data.search,
         placeholder: 'Search Pokémon...',
         '@input': (event) => {
           // stop searching for old data
-          this.data.search = event.target.value;
+          data.search = event.target.value;
           // Don't update if already updating
           if (this.data.updating_search) {
             return;
@@ -154,11 +156,11 @@ const toSearchModal = (data, actions) => {
           this.data.updating_search = true;
           // Recursive update function
           const update_matches = () => {
-            const guess = this.data.search;
+            const guess = data.search;
             const max_gen = data.online.max_gen;
             data.toMatches(guess, max_gen).then((new_matches) => {
               data.matches = new_matches;
-              const need_refresh = this.data.search != guess;
+              const need_refresh = data.search != guess;
               this.data.updating_search = need_refresh;
               if (need_refresh) {
                 update_matches();
@@ -204,7 +206,9 @@ const toSearchModal = (data, actions) => {
     async fetchPokemonForms(dexn) {
       if (searchQueue.needs('forms', dexn)) {
         // Request all regional forms for the pokemon
-        const forms = await getForms(data.api_root, dexn);
+        const forms = await getForms(
+          data.api_root, dexn, data.online.max_gen
+        );
         searchQueue.cache('forms', dexn, forms);
         data.matches = data.matches.map((p) => {
           if (p.dex == dexn) {
@@ -229,7 +233,6 @@ const toSearchModal = (data, actions) => {
     matches: () => JSON.stringify(data.matches),
     max_gen: () => data.online.max_gen,
     class: 'parent modal',
-    search: '',
   });
 
 }

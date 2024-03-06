@@ -1,14 +1,14 @@
 import sys
-import PIL
-import imageio
 import argparse
-import numpy as np
 from pathlib import Path
+import imageio
+import PIL
+import numpy as np
 
-def read_all_badges(args):
+def read_all_badges(in_dir, count):
     size = 50
-    for i in range(1, args.count+1):
-        i_png = args.in_dir / f'{i}.png'
+    for i in range(1, count+1):
+        i_png = in_dir / f'{i}.png'
         img = imageio.v2.imread(i_png, format='PNG-PIL')
         img = PIL.Image.fromarray(img).resize((size,)*2)
         yield np.asarray(img)
@@ -25,7 +25,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     out_img = np.concatenate(list(
-        read_all_badges(args)
+        read_all_badges(args.in_dir, args.count)
     ), 0)
 
     out_png = args.out_dir / 'badges.png'

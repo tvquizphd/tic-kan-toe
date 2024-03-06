@@ -1,8 +1,7 @@
-from pydantic import BaseModel
-from enum import Enum, IntEnum
-from typing import Annotated
-from typing import Optional
 import json
+from enum import Enum
+from typing import Annotated, Optional
+from pydantic import BaseModel
 
 class MessageState(str, Enum):
     battle = 'found'

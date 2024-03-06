@@ -1,24 +1,18 @@
-from pydantic import BaseSettings
-from pydantic import BaseModel
-from functools import lru_cache
-from pathlib import Path
-from typing import Dict, List
-from typing import Optional, Union
-from models import unpackage_mon_list
-from models import package_form_lists
-from models import to_dex_map
-from models import to_form
-from models import to_mon
-from models import Mon, Form
-from models import DexMap 
-from .base15 import write_base15
-from .base15 import read_base15
-
-from urllib.parse import urlparse
-import requests
-import logging
-import json
 import csv
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Union
+from urllib.parse import urlparse
+from functools import lru_cache
+from pydantic import BaseSettings, BaseModel
+import requests
+from models import (
+    unpackage_mon_list, package_form_lists,
+    to_dex_map, to_form, to_mon,
+    Mon, Form, DexMap
+)
+from .base15 import write_base15, read_base15
 
 CONFIG = {
     k: Path('data') / v for k,v in
@@ -38,10 +32,8 @@ def to_form_data(by_game_group, form, quantifier, key):
     for group, data in by_game_group.items():
         if form.game_group == group:
             found_game = True
-        if not found_game:
-            continue
-        for val in getattr(data, key):
-            yield val
+        if not found_game: continue
+        yield from getattr(data, key)
         # Strict only allows first game
         if quantifier != 'ALL': break
         # Subsequent games
@@ -52,19 +44,20 @@ def to_form_generations(*args):
 def to_form_regions(*args):
     return to_form_data(*(args+('regions',)))
 
-def to_form_region_no_gimicks(
+def to_form_region_no_gimmicks(
     mon, by_game_group, form, quantifier
 ):
-    gimicks = ['mega', 'primal', 'origin', 'gmax']
+    gimmicks = ['mega', 'primal', 'origin', 'gmax']
     args = [by_game_group, form, quantifier]
     has_gimick = (
-        any([
+        any(
             True for part in form.name.split('-')
-            if part in gimicks
-        ])
+            if part in gimmicks
+        )
     )
     # Gimick is from their original region
-    if has_gimick: args[1] = mon.forms[0]
+    if has_gimick:
+        args[1] = mon.forms[0]
     regions = list(to_form_regions(*args))
     # TODO -- games with two regions
     # -- disambiguate somehow
@@ -77,7 +70,6 @@ def to_generations(by_game_group, mon, quantifier):
             by_game_group, form, quantifier
         )
 
-# TODO redundant in service.py
 def id_from_url(url):
     split_url = urlparse(url).path.split('/')
     return int([s for s in split_url if s][-1])
@@ -85,26 +77,28 @@ def id_from_url(url):
 def get_api(root, endpoint, unsure=False):
     headers = {'content-type': 'application/json'}
     try:
-        r = requests.get(root + endpoint, headers=headers)
+        r = requests.get(
+            root + endpoint, headers=headers, timeout=30
+        )
         return r.json() 
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         if not unsure:
             logging.critical(e, exc_info=True)
         return None
 
 def to_valid_combos(mons, dex_map, type_combos):
     first_gens = dict()
-    by_generation = dex_map.by_generation
-    by_game_group = dex_map.by_game_group
-
     for mon in mons:
         for form in mon.forms:
             # All pokemon forms treated as from own generation
-            # But we treat gimicks as from their original regions 
-            gens = list(to_form_generations(by_game_group, form, 'SOME'))
-            if not len(gens): continue
-            first_region = to_form_region_no_gimicks(
-                mon, by_game_group, form, 'SOME'
+            # But we treat gimmicks as from their original regions 
+            gens = list(
+                to_form_generations(dex_map.by_game_group, form, 'SOME')
+            )
+            if len(gens) == 0:
+                continue
+            first_region = to_form_region_no_gimmicks(
+                mon, dex_map.by_game_group, form, 'SOME'
             )
             combo = type_combos[form.type_combo]
             types = list(set(combo))
@@ -124,17 +118,17 @@ def to_valid_combos(mons, dex_map, type_combos):
                     tuple(sorted([first_region, MONO]))
                 ]
             # Find first generation of pair
-            all_gens = list(by_generation.keys())
+            all_gens = list(dex_map.by_generation.keys())
             gen_limit = max(all_gens) + 1
-            first_gen = min(gens)
             for c in grid_pairs:
-                c_min_gen = first_gens.get(c, gen_limit)
-                first_gens[c] = min(first_gen, c_min_gen)
+                first_gens[c] = min(
+                    first_gens.get(c, gen_limit), *gens
+                )
     return {
         gen: sorted([
             c for c,v in first_gens.items() if v <= gen
         ])
-        for gen in by_generation.keys()
+        for gen in dex_map.by_generation.keys()
     } 
 
 def describe_type_combos(api_url):
@@ -170,7 +164,7 @@ def get_forms(mon_id, type_combos, api_url):
         )['forms']
     ]
 
-def get_mon(dexn, dex_map, type_combos, api_url):
+def get_mon(dexn, type_combos, api_url):
     pkmn = get_api(api_url, f'pokemon-species/{dexn}/', True)
     if not pkmn:
         raise ValueError(f'No pokemon #{dexn} found')
@@ -192,21 +186,22 @@ def yield_alt_forms(mon):
         yield form.form_id, form.name
 
 
-def describe_mon(dexn, dex_map, type_combos, api_url, todo=False):
-    mon = get_mon(dexn, dex_map, type_combos, api_url)
+def describe_mon(dexn, type_combos, api_url):
+    mon = get_mon(dexn, type_combos, api_url)
     return mon.name, mon, list(yield_alt_forms(mon))
 
 
 def to_ngrams(dex_map, mons):
-    by_generation = dex_map.by_generation
-    by_game_group = dex_map.by_game_group
     three_grams = dict()
     for mon in mons:
-        for max_gen in by_generation.keys():
-            gens = list(to_generations(by_game_group, mon, 'ALL'))
+        for max_gen in dex_map.by_generation.keys():
+            gens = list(
+                to_generations(dex_map.by_game_group, mon, 'ALL')
+            )
             name = mon.name
             mon_gen = min(gens) 
-            if not mon_gen or mon_gen > max_gen: continue
+            if not mon_gen or mon_gen > max_gen:
+                continue
             three = three_grams.get(max_gen, {})
             dex_list = three.get(name[:3], [])
             three[name[:3]] = dex_list + [
@@ -230,7 +225,8 @@ def fill_gen_dicts(**kwargs):
     by_generation = kwargs['dex_map'].by_generation
     by_game_group = kwargs['dex_map'].by_game_group
     gen_limit = 1 + max(by_generation.keys())
-    gen_range = lambda min_gen: range(min_gen, gen_limit)
+    def gen_range(min_gen):
+        return range(min_gen, gen_limit)
     for mon in mons:
         mon_origin_gen = min(
             to_generations(by_game_group, mon, 'SOME')
@@ -249,28 +245,27 @@ def fill_gen_dicts(**kwargs):
 
 def read_type_combos():
     try:
-        with open(CONFIG['TYPES'], 'r') as f:
+        with open(CONFIG['TYPES'], 'r', encoding='utf-8') as f:
             return json.loads(f.read())
     except FileNotFoundError:
         return []
 
 def read_game_list():
     try:
-        with open(CONFIG['GAMES'], 'r') as f:
+        with open(CONFIG['GAMES'], 'r', encoding='utf-8') as f:
             return json.loads(f.read())
     except FileNotFoundError:
         return []
 
 def read_form_index_list():
     try:
-        for value in read_base15(CONFIG['FORM_INDEX']):
-            yield value
+        yield from read_base15(CONFIG['FORM_INDEX'])
     except FileNotFoundError:
         pass
 
 def read_form_count_list():
     try:
-        with open(CONFIG['FORM_COUNT'], 'r') as f:
+        with open(CONFIG['FORM_COUNT'], 'r', encoding='utf-8') as f:
             form_reader = csv.reader(f, delimiter=',')
             for name,count in form_reader:
                 yield name, int(count)
@@ -280,15 +275,13 @@ def read_form_count_list():
 def read_extra_form_name_dict():
     def read_list():
         try:
-            with open(CONFIG['FORM_NAMES'], 'r') as f:
+            with open(CONFIG['FORM_NAMES'], 'r', encoding='utf-8') as f:
                 form_reader = csv.reader(f, delimiter=',')
                 for index,name in form_reader:
                     yield int(index), name
         except FileNotFoundError:
             pass
-    return {
-        form_id: name for form_id, name in read_list()
-    }
+    return dict(read_list())
 
 @lru_cache()
 def to_config():
@@ -302,7 +295,7 @@ def to_config():
         read_extra_form_name_dict()
     ))
 
-    with open(CONFIG['MAIN_ENV'], 'r') as f:
+    with open(CONFIG['MAIN_ENV'], 'r', encoding='utf-8') as f:
         kwargs = json.loads(f.read())
         kwargs['game_list'] = game_list
         kwargs['type_combos'] = type_combos
@@ -361,12 +354,12 @@ def set_config(**kwargs):
         package_form_lists(mon_list)
     )
 
-    with open(CONFIG['TYPES'], 'w') as f:
+    with open(CONFIG['TYPES'], 'w', encoding='utf-8') as f:
         f.write(json.dumps(type_combos)) 
-    with open(CONFIG['GAMES'], 'w') as f:
+    with open(CONFIG['GAMES'], 'w', encoding='utf-8') as f:
         f.write(json.dumps(game_list)) 
 
-    with open(CONFIG['FORM_NAMES'], 'w') as f:
+    with open(CONFIG['FORM_NAMES'], 'w', encoding='utf-8') as f:
         writer = csv.writer(f, delimiter=',')
         sorted_form_ids = sorted(list(
             extra_form_name_dict.keys()
@@ -377,11 +370,11 @@ def set_config(**kwargs):
 
     write_base15(CONFIG['FORM_INDEX'], form_index_list)
 
-    with open(CONFIG['FORM_COUNT'], 'w') as f:
+    with open(CONFIG['FORM_COUNT'], 'w', encoding='utf-8') as f:
         writer = csv.writer(f, delimiter=',')
         for name, form_count in form_count_list:
             writer.writerow([name, form_count])
-    with open(CONFIG['MAIN_ENV'], 'w') as f:
+    with open(CONFIG['MAIN_ENV'], 'w', encoding='utf-8') as f:
         f.write(json.dumps(kwargs))
 
 class Ports(BaseModel):
@@ -415,6 +408,3 @@ class Config(BaseSettings):
     ports: Ports
     api_url: str
     MONO: str
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)

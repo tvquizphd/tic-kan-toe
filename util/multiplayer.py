@@ -1,17 +1,16 @@
-from fastapi import WebSocket
-from functools import lru_cache
-from models import Message
-from models import MessageState
-from models import from_message
-from models import to_message
-from pydantic import BaseModel
-from typing import Any, Optional
-import threading
-from uuid import uuid4
+import sys
 import copy
 import queue
-import json
-import sys
+import threading
+from uuid import uuid4
+from typing import Any, Optional
+from functools import lru_cache
+from pydantic import BaseModel
+from fastapi import WebSocket
+from models import (
+    Message, MessageState,
+    from_message, to_message,
+)
 
 class User(BaseModel):
     client: Any # WebSocket
@@ -179,7 +178,7 @@ def memory_update(memory, message):
             ]
         # TODO -- handle battle conflicts
         # TODO -- using "grid_action"
-        if (message.grid_action):
+        if message.grid_action:
             print('Action')
             print(
                 message.grid_action.content.name,
@@ -207,7 +206,7 @@ def memory_update(memory, message):
         battle_update(memory, message, battle_k)
     ] 
 
-def start_worker(q, history):
+def to_worker(q, history):
     # battle: Two user keys
     # leader, trainer: One user key
     lock_memory_and_history = threading.Lock()
@@ -220,7 +219,11 @@ def start_worker(q, history):
     def worker():
         while True:
             q_item = q.get()
-            if (q.qsize()):
+            # Recieve signal to stop worker
+            if q_item == None:
+                q.task_done()
+                break
+            if q.qsize():
                 print(f'{q.qsize()} messages in queue')
             with lock_memory_and_history:
                 history_update(history, memory, q_item)
@@ -237,10 +240,9 @@ def start_worker(q, history):
             q.task_done()
             continue
 
-    # Start worker
-    threading.Thread(
-        target=worker, daemon=True
-    ).start()
+    return threading.Thread(
+        target=worker, daemon=False
+    )
 
 Q_LEN = 20
 HISTORY_LEN = 100
@@ -250,13 +252,14 @@ class Multiplayer:
         # Mutated by this class instance
         self.lock_user_dict = threading.Lock()
         self.user_dict: dict[str,User] = {}
-        # Q and HISTORY only mutated by daemon
+        # Q and HISTORY only mutated by worker
         self.Q = queue.Queue(maxsize=Q_LEN)
         self.HISTORY = [
             None for _ in range(HISTORY_LEN)
         ]
-        # Start the worker daemon
-        start_worker(self.Q, self.HISTORY)
+        # Start the worker
+        worker = to_worker(self.Q, self.HISTORY)
+        worker.start()
     
     @property
     def users(self) -> list[User]:
@@ -271,7 +274,7 @@ class Multiplayer:
         untracked_user_ids = set()
         for item in self.HISTORY:
             if item == None: continue
-            message_k, message = item
+            _, message = item
             for user_id in message.group_ids:
                 untracked_user_ids.add(user_id)
         # Return all user ids not matching users
@@ -308,7 +311,7 @@ class Multiplayer:
                 self.HISTORY, user_id
             )
             if not message_k_v: continue
-            message_k, message = message_k_v
+            message_k, _ = message_k_v
             if not isinstance(message_k, tuple):
                 continue
             # Find non-self affliates
@@ -346,11 +349,11 @@ class Multiplayer:
             ]
         ]
         untracked_uuids = [
-            *[uuid for uuid in users.keys()],
+            *list(users.keys()),
             *[
                 uuid
                 for user_id in untracked_user_ids
-                for uuid in self.find_users_by_user_id(user_id).keys()
+                for uuid in self.find_users_by_user_id(user_id)
             ]
         ]
         affiliated_users = self.find_affiliates(
@@ -389,7 +392,6 @@ class Multiplayer:
                 await user.client.send_text(data)
             except RuntimeError as e:
                 print(repr(e), file=sys.stderr)
-                pass
 
     async def send_message(self, broadcast: Message):
         print(
@@ -405,8 +407,10 @@ class Multiplayer:
         )
         # Associate message user id with client 
         for user in self.users:
-            if user.client != client: continue
-            if user.user_id: continue
+            if user.client != client:
+                continue
+            if user.user_id:
+                continue
             with self.lock_user_dict:
                 user.user_id = message.user_id
         # Handle the message
@@ -415,7 +419,8 @@ class Multiplayer:
         # Send all unique messages
         def find_history(k):
             k_v = search_history(self.HISTORY, k)
-            if not k_v: return []
+            if not k_v:
+                return []
             return [k_v[1]]
         unique_messages = ({
             tuple(message.group_ids): message
