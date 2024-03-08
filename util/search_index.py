@@ -17,7 +17,8 @@ INDEX = {
     k: Path('data') / v for k,v in
     ({
         'MODEL_RANKS': 'search-model-ranks.env.base15',
-        'MODEL_PLACE': 'search-model-placement.env.csv'
+        'MODEL_PLACE_KEYS': 'search-model-placement-keys.env.csv',
+        'MODEL_PLACE_VALS': 'search-model-placement-vals.env.base15'
     }).items()
 }
 
@@ -211,15 +212,20 @@ def get_raw(guide, url):
 
 
 def read_model_placement_dict():
-    def read_list():
+    def read_keys():
         try:
-            with open(INDEX['MODEL_PLACE'], 'r', encoding='utf-8') as f:
+            with open(INDEX['MODEL_PLACE_KEYS'], 'r', encoding='utf-8') as f:
                 place_reader = csv.reader(f, delimiter=',')
-                for name, placement in place_reader:
-                    yield name, int(placement)
+                yield from [x for row in place_reader for x in row]
         except FileNotFoundError:
             pass
-    return dict(read_list())
+    def read_vals():
+        try:
+            yield from read_base15(INDEX['MODEL_PLACE_VALS'])
+        except FileNotFoundError:
+            pass
+
+    return dict(zip(read_keys(), read_vals()))
 
 
 def read_model_ranks():
@@ -292,10 +298,14 @@ def set_search_index(**kwargs):
 
     write_base15(INDEX['MODEL_RANKS'], ranks)
 
-    with open(INDEX['MODEL_PLACE'], 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=',')
-        for name, placement in placement.items():
-            writer.writerow([name, f'{placement}'])
+    model_place_keys = sorted(placement.keys())
 
+    with open(INDEX['MODEL_PLACE_KEYS'], 'w', encoding='utf-8') as f:
+        writer = csv.writer(f, delimiter=',')
+        writer.writerow(model_place_keys)
+
+    write_base15(INDEX['MODEL_PLACE_VALS'], [
+        placement[key] for key in model_place_keys
+    ])
 
     print('pronunciations')
