@@ -1,1 +1,1 @@
-pylint --rcfile=pylint.rc api client util models main.py
+pylint --rcfile=pylint.rc api search client util models main.py

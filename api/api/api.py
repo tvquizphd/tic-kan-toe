@@ -1,20 +1,12 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from starlette.status import (
-    HTTP_201_CREATED as _201,
-    HTTP_422_UNPROCESSABLE_ENTITY as _422
-)
-from starlette.requests import Request
 from starlette.websockets import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends, FastAPI, WebSocket
-from fastapi.responses import JSONResponse
 from api.service import to_service
 from util import to_multiplayer
 from util import to_config
+from util import to_fast_api
 
 @asynccontextmanager
 async def lifespan(
@@ -28,31 +20,7 @@ async def lifespan(
     multiplayer.Q.put(None)
 
 # Construct API
-tvquiz_api = FastAPI(lifespan=lifespan)
-tvquiz_api.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-pool = ThreadPoolExecutor(max_workers=1)
-
-# Handle common FastAPI exceptions
-@tvquiz_api.exception_handler(RequestValidationError)
-async def validation_exception_handler(_: Request, exc: RequestValidationError):
-    content = {'status_code': 10422, 'data': None}
-    print(f'{exc}'.replace('\n', ' ').replace('   ', ' '))
-    return JSONResponse(content=content, status_code=_422)
-
-'''
-TODO: Documentation for Development
-'''
-
-@tvquiz_api.get("/api")
-def open_root_api(config=Depends(to_config)):
-    return { **vars(config) }
+tvquiz_api = to_fast_api(lifespan=lifespan)
 
 
 # Multiplayer support

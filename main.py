@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 import asyncio
 import uvicorn
 from util import (
+    set_search_index,
     set_config, describe_mon, describe_type_combos,
     read_extra_form_name_dict, read_form_count_list,
     read_form_index_list, read_type_combos, read_game_list
@@ -13,7 +14,7 @@ from util import (
 from models import (
     unpackage_mon_list 
 )
-from api.service import Service 
+from api.service import Service
 
 CERT_ROOT = Path('/etc/letsencrypt/live/')
 
@@ -25,7 +26,8 @@ parser.add_argument('--cert-name', type=str)
 parser.add_argument('--ui-port', type=int, default=3134)
 parser.add_argument('--default-max-gen', type=int, default=1)
 
-def to_server(pem_path, port, module, scope, log_level):
+def to_server(pem_path, port, module, log_level):
+    scope = 'tvquiz'
     print(f'Running {scope} {module} on port {port}')
     uvicorn_config = {
         "port": port,
@@ -63,21 +65,22 @@ def to_server(pem_path, port, module, scope, log_level):
 async def run_tasks(ports, pem_path):
 
     asyncio.get_event_loop()
-    api_server = to_server(
-        pem_path, ports['api'], 'api', 'tvquiz', 'info'
-    )
-    client_server = to_server(
-        pem_path, ports['client'], 'client', 'tvquiz', 'error'
-    )
-    api_task = asyncio.ensure_future(api_server.serve())
-    client_task = asyncio.ensure_future(client_server.serve())
-
+    levels = { 'client': 'error' }
+    servers = [
+        to_server(
+            pem_path, port, name, levels.get(name, 'info')
+        )
+        for name, port in ports.items() 
+    ]
+    tasks = [
+        asyncio.ensure_future(server.serve())
+        for server in servers
+    ]
     # Consider following updates here:
     # https://github.com/encode/uvicorn/pull/1600
-    tasks = [api_task, client_task]
     def signal_handler(_s,_f):
-        api_server.should_exit = True
-        client_server.should_exit = True
+        for server in servers:
+            server.should_exit = True
     signal.signal(signal.SIGINT, signal_handler)
     await asyncio.gather(*tasks)
     print('\nClosed servers')    
@@ -100,11 +103,15 @@ def update_type_combos(api_url):
 def start_servers(args, **config_kwargs):
     ports = {
         'client': args.ui_port,
-        'api': args.ui_port + 1
+        'api': args.ui_port + 1,
+        'search': args.ui_port + 2
     }
     pem_path = (
         CERT_ROOT / args.cert_name
         if args.cert_name else None
+    )
+    set_search_index(
+        mon_list = config_kwargs['mon_list']
     )
     set_config(**{
         **config_kwargs, 'ports': ports,

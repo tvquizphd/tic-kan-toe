@@ -74,16 +74,19 @@ def id_from_url(url):
     split_url = urlparse(url).path.split('/')
     return int([s for s in split_url if s][-1])
 
-def get_api(root, endpoint, unsure=False):
+def get_api(root, endpoint, parse='json'):
     headers = {'content-type': 'application/json'}
     try:
         r = requests.get(
             root + endpoint, headers=headers, timeout=30
         )
+        if parse != 'json':
+            return r.text
         return r.json() 
+    except requests.exceptions.JSONDecodeError as e:
+        return None
     except requests.exceptions.RequestException as e:
-        if not unsure:
-            logging.critical(e, exc_info=True)
+        logging.critical(e, exc_info=True)
         return None
 
 def to_valid_combos(mons, dex_map, type_combos):
@@ -165,7 +168,7 @@ def get_forms(mon_id, type_combos, api_url):
     ]
 
 def get_mon(dexn, type_combos, api_url):
-    pkmn = get_api(api_url, f'pokemon-species/{dexn}/', True)
+    pkmn = get_api(api_url, f'pokemon-species/{dexn}/')
     if not pkmn:
         raise ValueError(f'No pokemon #{dexn} found')
     forms = [
