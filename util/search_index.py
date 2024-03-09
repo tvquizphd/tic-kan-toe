@@ -5,8 +5,9 @@ from pathlib import Path
 from itertools import (
     accumulate, product, chain 
 )
+from sortedcontainers import SortedList
 from typing import Dict, List, Callable 
-from pydantic import BaseSettings, BaseModel
+from pydantic import BaseSettings, BaseModel 
 from ipapy.arpabetmapper import ARPABETMapper
 from recombinant import Learner
 import wikitextparser as wtp
@@ -18,7 +19,6 @@ from . import get_api
 INDEX = {
     k: Path('data') / v for k,v in
     ({
-        'MODEL_RANKS': 'search-model-ranks.env.base15',
         '2_PHONES': 'search-fit-replacement-2-phones.env.base15',
         '3_PHONES': 'search-fit-replacement-3-phones.env.base15',
         '4_PHONES': 'search-fit-replacement-4-phones.env.base15',
@@ -34,7 +34,9 @@ def batched(inputs, n):
 
 class TrainedModel(BaseModel):
     placement: Dict[str, int]
-    ranks: List[int]
+    ranks: SortedList 
+    class Config:
+        arbitrary_types_allowed = True
 
 class Mappers(BaseModel):
     arpepet_table: Dict[str, str]
@@ -230,13 +232,11 @@ def read_model_placement_dict():
 
 def read_model_ranks():
     try:
-        yield from read_base15(INDEX['MODEL_RANKS'])
+        return SortedList([0] + list(
+            read_base15(INDEX['MODEL_PLACE_VALS'])
+        ))
     except FileNotFoundError:
         pass
-
-def to_search_index():
-    model_ranks = list(read_model_ranks())
-    model_placement = read_model_placement_dict()
 
 
 def to_arpepet_variant(
@@ -354,10 +354,17 @@ def load_replacement_dict(
     except FileNotFoundError:
         return None
 
+def to_search_index():
+    trained = TrainedModel(
+        ranks = read_model_ranks(),
+        placement = read_model_placement_dict()
+    )
+    print('found trained model')
+
 def set_search_index(**kwargs):
 
     trained = TrainedModel(
-        ranks = list(read_model_ranks()),
+        ranks = read_model_ranks(),
         placement = read_model_placement_dict()
     )
     is_trained = all((
@@ -493,8 +500,6 @@ def set_search_index(**kwargs):
             INDEX[f'{n}_PHONES'], replacement_dict,
             sorted_arpepet_phones, n=n
         )
-    # Save trained model
-    write_base15(INDEX['MODEL_RANKS'], ranking.ranks)
     # Phone strings, sorted by rating for readability
     model_place_keys = [
         key for _, key in sorted([
@@ -502,6 +507,7 @@ def set_search_index(**kwargs):
             for key in ranking.placement
         ], reverse=True)
     ]
+    # Save trained model
     write_base15(INDEX['MODEL_PLACE_VALS'], [
         ranking.placement[key] for key in model_place_keys
     ])
