@@ -83,7 +83,7 @@ def get_api(root, endpoint, parse='json'):
         if parse != 'json':
             return r.text
         return r.json() 
-    except requests.exceptions.JSONDecodeError as e:
+    except requests.exceptions.JSONDecodeError:
         return None
     except requests.exceptions.RequestException as e:
         logging.critical(e, exc_info=True)
