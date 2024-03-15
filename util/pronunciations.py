@@ -1,25 +1,22 @@
 import re
-from typing import (
-    Dict, List 
-)
+from typing import List
 import wikitextparser as wtp
 from pydantic import BaseModel
 from .config import get_api
 from .syllables import (
     match_syllables, invent_syllables
 )
-from .match_bits import to_match_bits
+from .bit_sums import BitSums
 from .arpepet import (
     alphabet_to_arpepet, ipa_to_arpepet
 )
 
 
 class Pronunciation(BaseModel):
-    id: int
-    alphabet_match_bits: Dict[int,int]
-    arpepet_match_bits: Dict[int,int]
     syllable_phones: List[str]
+    bit_sums: BitSums
     phones: str
+    id: int
 
 
 def get_raw(guide, url):
@@ -44,26 +41,6 @@ def parse_generation_page(page_text, mappers):
     ]
 
 
-def to_alphabet_bigram_bits(mappers, vals):
-    return sum(
-        to_match_bits(
-            2, q.lower(),
-            mappers.alphabet_ngram_lists[2], {}
-        )
-        for q in vals
-    )
-
-
-def to_arpepet_4gram_bits(mappers, vals):
-    return sum(
-        to_match_bits(
-            4, q.lower(),
-            mappers.arpepet_ngram_lists[4], {}
-        )
-        for q in vals
-    )
-
-
 def page_to_pronunciation(mappers, args):
     respelled_syllables = args[5].value.lower().split('-')
     arpepet_of_eng_syllables = [
@@ -78,25 +55,18 @@ def page_to_pronunciation(mappers, args):
         arpepet_of_eng_syllables,
         arpepet_of_ipa_words,
     )
-    alphabet_bigram_bits = to_alphabet_bigram_bits(
-        mappers, [
-            q for idx in [1, 3, 5]
-            for q in args[idx].value.split('-')
-        ]
-    )
-    arpepet_4gram_bits = to_arpepet_4gram_bits(
-        mappers, [ ''.join(arpepet_syllables) ]
-    )
+    arpepet_word = ''.join(arpepet_syllables)
+    alphabet_words = [
+        q.lower() for idx in [1, 3, 5]
+        for q in args[idx].value.split('-')
+    ]
     return Pronunciation(
         id=int(args[0].value),
+        phones=arpepet_word,
         syllable_phones=arpepet_syllables,
-        phones=''.join(arpepet_syllables),
-        alphabet_match_bits={
-            2: alphabet_bigram_bits
-        },
-        arpepet_match_bits={
-            4: arpepet_4gram_bits 
-        }
+        bit_sums=mappers.sum_bits(
+            alphabet_words, [arpepet_word]
+        )
     )
 
 
@@ -107,40 +77,42 @@ def mon_to_pronunciation(mappers, reviewers, mon):
         ))
         for syllable in mon.name.split('-') 
     ]
+    alphabet_words = [ mon.name.lower() ]
+    arpepet_word = ''.join(arpepet_syllables)
     # Most common case: no dash in name
     if len(arpepet_syllables) == 1:
         arpepet_syllables = invent_syllables(
             reviewers,  arpepet_syllables[0],
             max_syllables=3
         )
-    alphabet_bigram_bits = to_alphabet_bigram_bits(
-        mappers, [ mon.name ]
-    )
-    arpepet_4gram_bits = to_arpepet_4gram_bits(
-        mappers, [ ''.join(arpepet_syllables) ]
-    )
     return Pronunciation(
         id=mon.id,
+        phones=arpepet_word,
         syllable_phones=arpepet_syllables,
-        phones=''.join(arpepet_syllables),
-        alphabet_match_bits={
-            2: alphabet_bigram_bits
-        },
-        arpepet_match_bits={
-            4: arpepet_4gram_bits 
-        }
+        bit_sums=mappers.sum_bits(
+            alphabet_words, [arpepet_word]
+        )
     )
 
 
-def find_pronunciations(
-        fandom, mappers
-    ):
+def to_fandom_pronunciations(fandom, mappers):
     pages = list(find_generation_pages(
         f'{fandom}/wiki/Pokémon_Pronunciation_Guide'
     ))
     return {
         name.id: name for page in pages
-        for name in parse_generation_page(
-            page, mappers
-        )
+        for name in parse_generation_page(page, mappers)
     }
+
+
+def to_all_pronunciations(
+        mappers, reviewers, mon_list,
+        fandom_pronunciations
+    ):
+    return [
+        fandom_pronunciations[mon.id]
+        if mon.id in fandom_pronunciations else (
+            mon_to_pronunciation(mappers, reviewers, mon)
+        )
+        for mon in mon_list
+    ]

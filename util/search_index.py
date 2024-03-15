@@ -1,26 +1,22 @@
 from pathlib import Path
-from itertools import (
-    product
-)
 from typing import (
     Dict, Callable
 )
 from sortedcontainers import SortedList
-from pydantic import BaseSettings, BaseModel
-from ipapy.arpabetmapper import ARPABETMapper
+from pydantic import BaseModel
 from recombinant import Learner
-from g2p_en import G2p
+from .mappers import to_mappers 
+from .ngram import to_ngram_set
 from .base15 import (
     write_base15, read_base15
 )
 from .substitute import (
-    to_substitute_dict_4grams
+    to_ngram_substitutes
 )
 from .pronunciations import (
-    find_pronunciations,
-    mon_to_pronunciation
+    to_fandom_pronunciations,
+    to_all_pronunciations
 )
-from .mappers import Mappers
 from .search_results import (
     index_search_results#, unpack_results
 )
@@ -32,6 +28,8 @@ INDEX = {
         'INDEX': 'search-index',
         'MODEL_KEYS': 'search-model-keys.env.base15',
         'MODEL_VALS': 'search-model-vals.env.base15',
+        '2_PHONES': 'search-fit-2-phones.env.base15',
+        '3_PHONES': 'search-fit-3-phones.env.base15',
         '4_PHONES': 'search-fit-4-phones.env.base15'
     }.items()
 }
@@ -46,21 +44,15 @@ class TrainedModel(BaseModel):
 class Reviewers(BaseModel):
     rate_phonotactics: Callable[[str], int]
 
-class Index(BaseSettings):
-    pass
-
 
 def with_only_alphabet(word):
     return "".join(
         x for x in word if x.isalpha()
     )
 
-
 def to_alphabet_bigrams(word: str):
     x = with_only_alphabet(word.lower())
-    return set(
-        a+b for a,b in zip(x,x[1:])
-    )
+    return to_ngram_set(x, 2)
 
 
 def read_model_placement_dict(arpepet_list):
@@ -115,65 +107,9 @@ def read_fit_substitute_dict(
         return None
 
 
-def to_mappers():
-    alphabet_list = list(
-        'abcdefghijklmnopqrstuvwxyz'
-    )
-    arpepet_list =  (
-        'A E I O U Y T S R F H N P C'
-    ).split(' ')
-    return Mappers(
-        alphabet_to_arpabet = G2p(),
-        ipa_to_arpabet = (
-            ARPABETMapper().map_unicode_string
-        ),
-        arpepet_list = arpepet_list,
-        alphabet_list = alphabet_list,
-        alphabet_ngram_lists = {
-            n: [
-                ''.join(ngram) for ngram in
-                product(alphabet_list, repeat=n)
-            ]
-            for n in [2, 4]
-        },
-        arpepet_ngram_lists = {
-            n: [
-                ''.join(ngram) for ngram in
-                product(arpepet_list, repeat=n)
-            ]
-            for n in [4]
-        },
-        arpepet_table = {
-            'A': 'AA AO AH',
-            'E': 'AE AX EH ER',
-            'I': 'IH IY IX',
-            'O': 'AW OW',
-            'U': 'UH UW UX W WH',
-            'Y': 'AY EY OY Y',
-            'T': 'T D',
-            'S': 'S SH Z ZH',
-            'R': 'L R EL DX AXR',
-            'F': 'DH TH F V',
-            'H': 'G K HH Q',
-            'N': 'M N NG NX EM EN',
-            'P': 'B P',
-            'C': 'CH JH'
-        },
-        arpepet_vowels = [
-            ['Y','U'],
-            ['I','O'],
-            ['E','A'],
-        ],
-        arpepet_consonants = [
-            ['P', 'T', 'H', 'N'],
-            ['F', 'S', 'C', 'R']
-        ]
-    )
-
-
 def to_search_index():
     mappers = to_mappers()
-    bigrams = mappers.alphabet_ngram_lists[2]
+    bigrams = mappers.ngram_lists['alphabet'][2]
     try:
         return read_search_index(
             bigrams
@@ -195,12 +131,61 @@ def read_search_index(bigrams):
 
 
 def verify_search_index(mappers):
-    bigrams = mappers.alphabet_ngram_lists[2]
+    bigrams = mappers.ngram_lists['alphabet'][2]
     try:
         read_search_index(bigrams)
     except FileNotFoundError:
         return False
     return True
+
+
+def save_search_index(mappers, search_index):
+    for k0,v0 in search_index.items():
+        out_file = INDEX['INDEX'] / f'{k0}.base15'
+        write_base15(out_file, [
+            v0.get(k1, 0)
+            for k1 in mappers.ngram_lists['alphabet'][2]
+        ])
+
+
+def save_arpepet_substitutes(mappers, substitutes):
+    for n, subs in substitutes['arpepet'].items():
+        write_fit_substitute_dict(
+            INDEX[f'{n}_PHONES'], subs, mappers.arpepet_list
+        )
+
+
+def save_model(mappers, reviewers, ranking):
+    model_place_keys = [
+        key for _, key in sorted([
+            (reviewers.rate_phonotactics(key), key)
+            for key in ranking.placement
+        ], reverse=True)
+    ]
+    # Save trained model
+    write_base15(INDEX['MODEL_VALS'], [
+        ranking.placement[key] for key in model_place_keys
+    ])
+    write_base15(INDEX['MODEL_KEYS'],
+        model_place_keys, mappers.arpepet_list
+    )
+
+
+def load_arpepet_substitutes(
+        n_list, mappers, reviewers, ranking 
+    ):
+    substitutes = {
+        n: read_fit_substitute_dict(
+            INDEX[f'{n}_PHONES'], mappers.arpepet_list
+        )
+        for n in n_list 
+    }
+    for n in n_list:
+        if substitutes[n] is None:
+            substitutes[n] = to_ngram_substitutes(
+                n, mappers, reviewers, ranking.placement
+            ) 
+    return substitutes 
 
 
 def set_search_index(**kwargs):
@@ -218,86 +203,54 @@ def set_search_index(**kwargs):
     if verify_search_index(mappers):
         print('Using saved search index')
         return
-    print('Found no saved search index')
-    print('Reading names (from Let\'s Play Wiki)')
-    mon_id_pronunciations = find_pronunciations(
+    print(
+        'Found no saved search index',
+        '\nReading names (from Fandom Wiki)...'
+    )
+    fandom_pronunciations = to_fandom_pronunciations(
         'https://pokemonlp.fandom.com', mappers
     )
-    # Use syllables, not words, for performance
+    print('Read names. Finding phonotactics...')
+    # Use syllables to learn phonotactics
     well_formed_model = Learner([
-        phone for name in mon_id_pronunciations.values() 
+        phone for name in fandom_pronunciations.values() 
         for phone in name.syllable_phones
     ])
     ranking = well_formed_model.ranking
     if len(trained.ranks) and len(trained.placement):
         ranking.placement = trained.placement
         ranking.ranks = trained.ranks
+        print('Found phonotactics.')
     else:
-        print('Learning phonotactics (over two epochs)')
+        print('Learning phonotactics (over two epochs)...')
         well_formed_model.optimize()
-    print('Using learned phonotactics')
-    reviewers = Reviewers(
-        rate_phonotactics = ranking.p
-    )
-    # Define mons that are missing
-    todo = 1020
-    pronunciations = [
-        mon_id_pronunciations[mon.id]
-        if mon.id in mon_id_pronunciations and mon.id < todo else (
-            mon_to_pronunciation(mappers, reviewers, mon)
-        )
-        for mon in mon_list
-    ]
+        print('Learned phonotactics.')
+    reviewers = Reviewers(rate_phonotactics = ranking.p)
+    # Find pronunciations for any missing mons
+    pronunciations = to_all_pronunciations(
+        mappers, reviewers, mon_list,
+        fandom_pronunciations
+    ) 
+    print('Finding substitutes...')
     # Map phones that are missing
-    substitute_dict_4grams = read_fit_substitute_dict(
-        INDEX['4_PHONES'], mappers.arpepet_list
-    )
-    if substitute_dict_4grams is None:
-        print('Finding substitutions (arpepet 4-grams)')
-        substitute_dict_4grams = to_substitute_dict_4grams(
-            mappers, reviewers, [
-                phones for phones in ranking.placement
-                if any(
-                    phones in name.phones
-                    for name in pronunciations
-                )
-            ]
+    substitutes = {
+        'arpepet': load_arpepet_substitutes(
+            [2, 3, 4], mappers, reviewers, ranking
         ) 
+    }
     print(
-        'Using substitutions for',
-        len(substitute_dict_4grams),
-        'missing arpepet 4-grams'
+        'Substitutes for arpepet:',
+        len(substitutes['arpepet'][2]), '2-grams,',
+        len(substitutes['arpepet'][3]), '3-grams, and',
+        len(substitutes['arpepet'][4]), '4-grams',
+        '\nCreating full search index (from aaaa to zzzz)'
     )
-    print('Creating full search index')
     search_index = index_search_results(
-        mappers, pronunciations,
-        substitute_dict_4grams
+        mappers, pronunciations, substitutes
     )
     # TODO: aggregate top-level bigram results 
-    print('Saving search index!')
-    for k0,v0 in search_index.items():
-        out_file = INDEX['INDEX'] / f'{k0}.base15'
-        write_base15(out_file, [
-            v0.get(k1, 0)
-            for k1 in mappers.alphabet_ngram_lists[2]
-        ])
-
-    # Save substitutes
-    write_fit_substitute_dict(
-        INDEX['4_PHONES'], substitute_dict_4grams,
-        mappers.arpepet_list
-    )
+    save_arpepet_substitutes(mappers, substitutes)
+    save_search_index(mappers, search_index)
+    save_model(mappers, reviewers, ranking)
     # Phone strings, sorted by rating for readability
-    model_place_keys = [
-        key for _, key in sorted([
-            (reviewers.rate_phonotactics(key), key)
-            for key in ranking.placement
-        ], reverse=True)
-    ]
-    # Save trained model
-    write_base15(INDEX['MODEL_VALS'], [
-        ranking.placement[key] for key in model_place_keys
-    ])
-    write_base15(INDEX['MODEL_KEYS'],
-        model_place_keys, mappers.arpepet_list
-    )
+    print('Saved!')

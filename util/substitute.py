@@ -82,11 +82,11 @@ def handle_missing_phones(
                 break
 
 
-def to_substitute_dict_4grams(
-        mappers, reviewers, valid_phones
+def to_ngram_substitutes(
+        n, mappers, reviewers, valid_phones
     ):
-    four_phones = [
-        phones for phones in valid_phones if len(phones) == 4
+    n_phones = [
+        phones for phones in valid_phones if len(phones) == n
     ]
     two_phones = [
         phones for phones in valid_phones if len(phones) == 2
@@ -94,9 +94,9 @@ def to_substitute_dict_4grams(
     substitute_dict_2grams = dict(handle_missing_phones(
         mappers, reviewers, two_phones, {}, n=2
     ))
-    substitute_dict_4grams = dict(handle_missing_phones(
-        mappers, reviewers, four_phones,
-        substitute_dict_2grams, n=4
+    if n == 2:
+        return substitute_dict_2grams
+    return dict(handle_missing_phones(
+        mappers, reviewers, n_phones,
+        substitute_dict_2grams, n=n
     ))
-    return substitute_dict_4grams
-
