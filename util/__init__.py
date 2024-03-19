@@ -16,7 +16,6 @@ from .config import read_form_index_list
 from .config import read_type_combos
 from .config import read_game_list
 
-from .search_index import set_search_index
-from .search_index import to_search_index
+from .search_index import set_packed_index
 from .multiplayer import to_multiplayer
 from .fast_api import to_fast_api

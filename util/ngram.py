@@ -27,23 +27,25 @@ def to_alphabet_trigram_end(grams: Grams):
     return set([grams.alphabet[-3:]])
 
 
-def to_all_arpepet_ngram_start(n):
+def to_all_arpepet_ngram_start(subs, n):
     def to_ngram_start(grams: Grams):
-        if len(grams.arpepet) < n:
+        arpepet = subs.get(
+            grams.arpepet, grams.arpepet
+        )
+        if len(arpepet) < n:
             return set()
-        return set([
-            grams.arpepet[:n]
-        ])
+        return set([ arpepet[:n] ])
     return to_ngram_start
 
 
-def to_all_arpepet_ngrams(n):
+def to_all_arpepet_ngrams(subs, n):
     def to_ngrams(grams: Grams):
-        if len(grams.arpepet) < n:
-            return set()
-        return to_ngram_set(
-            grams.arpepet, n
+        arpepet = subs.get(
+            grams.arpepet, grams.arpepet
         )
+        if len(arpepet) < n:
+            return set()
+        return to_ngram_set(arpepet, n)
     return to_ngrams
 
 

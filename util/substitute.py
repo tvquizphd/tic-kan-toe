@@ -1,12 +1,11 @@
-from itertools import (
-    product, chain
-)
+from itertools import product 
 
-def to_arpepet_variant(
-    arpepet_vowels, arpepet_consonants, phone
-    ):
+def to_arpepet_variant(mappers, phone):
     phone_matrix, idx1, idx2 = (None, None, None)
-    for matrix in (arpepet_vowels, arpepet_consonants):
+    matrices = (
+        mappers.arpepet_vowels, mappers.arpepet_consonants
+    )
+    for matrix in matrices:
         vector = [value for row in matrix for value in row]
         width = len(matrix[0])
         try:
@@ -28,75 +27,61 @@ def to_arpepet_variant(
     )
 
 
-def to_arpepet_variants(
-    arpepet_vowels, arpepet_consonants,
-    rate_phonotactics, phones
-    ):
+def to_arpepet_variants(mappers, reviewers, phone):
     vowels = [
-        v for row in arpepet_vowels for v in row
+        v for row in mappers.arpepet_vowels for v in row
     ]
     variants = []
-    for index, phone_in in enumerate(list(phones)):
-        for phone_out in to_arpepet_variant(
-            arpepet_vowels, arpepet_consonants, phone_in
-        ):
-            phones_out = ''.join([
-                phone_out if i == index else x
-                for i,x in enumerate(list(phones))
+    for index, char in enumerate(list(phone)):
+        for char_out in to_arpepet_variant(mappers, char):
+            phone_out = ''.join([
+                char_out if i == index else x
+                for i,x in enumerate(list(phone))
             ])
             variants.append((
-                int(phone_in not in vowels),
-                rate_phonotactics(phones_out),
-                phones_out
+                int(phone_out[index] in vowels),
+                reviewers.rate_phonotactics(phone_out),
+                phone_out
             ))
-    return [v[-1] for v in sorted(variants, reverse=False)]
+    return [v[-1] for v in sorted(variants, reverse=True)]
 
 
-
-def handle_missing_phones(
-        mappers, reviewers, valid_phones,
-        substitute_dict, n
-    ):
-    missing_phones = [
-        ''.join(chain(args)) for args in product(
-            mappers.arpepet_table.keys(), repeat=n
+def resize_phone(mappers, reviewers, bad_phone, n):
+    diff = max(0, n - len(bad_phone))
+    if diff == 0:
+        return [(bad_phone, bad_phone[:n])]
+    good_phones = [
+        bad_phone + ''.join(args)
+        for args in product(
+            mappers.arpepet_table.keys(), repeat=diff
         )
-        if ''.join(chain(args)) not in valid_phones
     ]
-    for missing_phone in missing_phones:
-        for args in substitute_dict.items():
-            replaced = missing_phone.replace(*args)
-            if replaced in valid_phones:
-                yield missing_phone, replaced
-                continue
+    return [(bad_phone, v[-1]) for v in sorted([
+        (reviewers.rate_phonotactics(phone), phone)
+        for phone in good_phones
+    ], reverse=True)]
 
+
+def iterate_ngram_substitutes(
+        mappers, reviewers, valid_phones, n
+    ):
+    phone_pairs = (
+        pair for n_i in range(1, n+1) for args in product(
+            mappers.arpepet_table.keys(), repeat=n_i
+        )
+        for pair in resize_phone(
+            mappers, reviewers, ''.join(args), n
+        )
+    )
+    for bad_phone, phone in phone_pairs:
+        if phone in valid_phones:
+            yield bad_phone, phone
         variants = to_arpepet_variants(
-            mappers.arpepet_vowels,
-            mappers.arpepet_consonants,
-            reviewers.rate_phonotactics,
-            missing_phone
+            mappers, reviewers, phone
         )
         for variant in variants:
             if variant in valid_phones:
-                yield missing_phone, variant
-                break
+                yield bad_phone, variant
 
-
-def to_ngram_substitutes(
-        n, mappers, reviewers, valid_phones
-    ):
-    n_phones = [
-        phones for phones in valid_phones if len(phones) == n
-    ]
-    two_phones = [
-        phones for phones in valid_phones if len(phones) == 2
-    ]
-    substitute_dict_2grams = dict(handle_missing_phones(
-        mappers, reviewers, two_phones, {}, n=2
-    ))
-    if n == 2:
-        return substitute_dict_2grams
-    return dict(handle_missing_phones(
-        mappers, reviewers, n_phones,
-        substitute_dict_2grams, n=n
-    ))
+def to_ngram_substitutes(*args):
+    return dict(iterate_ngram_substitutes(*args))

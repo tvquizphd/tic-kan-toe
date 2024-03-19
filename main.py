@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import asyncio
 import uvicorn
 from util import (
-    set_search_index,
+    set_packed_index,
     set_config, describe_mon, describe_type_combos,
     read_extra_form_name_dict, read_form_count_list,
     read_form_index_list, read_type_combos, read_game_list
@@ -110,7 +110,7 @@ def start_servers(args, **config_kwargs):
         CERT_ROOT / args.cert_name
         if args.cert_name else None
     )
-    set_search_index(
+    set_packed_index(
         mon_list = config_kwargs['mon_list']
     )
     set_config(**{

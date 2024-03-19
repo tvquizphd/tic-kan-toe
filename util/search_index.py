@@ -5,10 +5,16 @@ from typing import (
 from sortedcontainers import SortedList
 from pydantic import BaseModel
 from recombinant import Learner
-from .mappers import to_mappers 
+from .mappers import (
+    Mappers, to_mappers 
+)
 from .ngram import to_ngram_set
 from .base15 import (
     write_base15, read_base15
+)
+from .bit_sums import (
+    to_one_hot_encoding_sum,
+    from_one_hot_encoding
 )
 from .substitute import (
     to_ngram_substitutes
@@ -18,14 +24,18 @@ from .pronunciations import (
     to_all_pronunciations
 )
 from .search_results import (
-    index_search_results#, unpack_results
+    PackedIndex,
+    index_search_results,
+    to_all_ngram_results
 )
 
-
+VERSION = "v1.1.0"
 INDEX = {
     k: Path('data') / v for k,v in
     {
-        'INDEX': 'search-index',
+        'NGRAMS': 'search-ngrams',
+        'INDEX': f'search-index-{VERSION}',
+        'SUBSETS': f'search-subsets-{VERSION}',
         'MODEL_KEYS': 'search-model-keys.env.base15',
         'MODEL_VALS': 'search-model-vals.env.base15',
         '2_PHONES': 'search-fit-2-phones.env.base15',
@@ -33,7 +43,8 @@ INDEX = {
         '4_PHONES': 'search-fit-4-phones.env.base15'
     }.items()
 }
-INDEX['INDEX'].mkdir(parents=True, exist_ok=True)
+for directory in ['NGRAMS', 'SUBSETS', 'INDEX']:
+    INDEX[directory].mkdir(parents=True, exist_ok=True)
 
 class TrainedModel(BaseModel):
     placement: Dict[str, int]
@@ -107,45 +118,98 @@ def read_fit_substitute_dict(
         return None
 
 
-def to_search_index():
-    mappers = to_mappers()
+def verify_packed_index(mappers, mon_list):
     bigrams = mappers.ngram_lists['alphabet'][2]
     try:
-        return read_search_index(
-            bigrams
-        )
-    except FileNotFoundError:
-        return None
-
-
-def read_search_index(bigrams):
-    search_index = {}
-    for k0 in bigrams:
-        packed_vals = read_base15(
-            INDEX['INDEX'] / f'{k0}.base15'
-        )
-        search_index[k0] = {}
-        for k1,packed in zip(bigrams, packed_vals):
-            search_index[k1] = packed 
-    return search_index
-
-
-def verify_search_index(mappers):
-    bigrams = mappers.ngram_lists['alphabet'][2]
-    try:
-        read_search_index(bigrams)
+        packed = {
+            first: read_one_packed_index(bigrams, first)
+            for first in (bigrams[0], bigrams[-1])
+        }
+        for first, last in zip('az', 'za'):
+            print(
+                f'Results for "{first*2}{last*2}":',
+                ', '.join(list(
+                mon_list[id-1].name
+                for id in packed[first*2].id_list
+                if id in packed[first*2].subsets[last*2]
+            )))
     except FileNotFoundError:
         return False
     return True
 
 
-def save_search_index(mappers, search_index):
-    for k0,v0 in search_index.items():
-        out_file = INDEX['INDEX'] / f'{k0}.base15'
-        write_base15(out_file, [
-            v0.get(k1, 0)
-            for k1 in mappers.ngram_lists['alphabet'][2]
-        ])
+def read_one_ngram_result(mappers, kind, n):
+    path = INDEX['NGRAMS'] / f'{kind}-{n}.env.base15'
+    ngram_list = mappers.ngram_lists[kind][n]
+    try:
+        return dict(zip(
+            ngram_list, read_base15(path)
+        ))
+    except FileNotFoundError:
+        return None
+
+
+def read_all_ngram_results(mappers, checklist_keys):
+    results = {
+        key: read_one_ngram_result(mappers, *key)
+        for key in checklist_keys
+    }
+    return {
+        k: v for k,v in results.items() if v
+    }
+
+
+def save_one_ngram_result(mappers, kind, n, result):
+    path = INDEX['NGRAMS'] / f'{kind}-{n}.env.base15'
+    ngram_list = mappers.ngram_lists[kind][n]
+    write_base15(
+        path, [result[ngram] for ngram in ngram_list]
+    )
+
+def save_all_ngram_results(mappers, all_ngram_results):
+    for (kind, n), result in all_ngram_results.items():
+        save_one_ngram_result(mappers, kind, n, result)
+
+
+def read_one_packed_index(bigrams, bigram):
+    id_list = list(read_base15(
+        INDEX['INDEX'] / f'{bigram}.env.base15'
+    ))
+    encodings = read_base15(
+        INDEX['SUBSETS'] / f'{bigram}.env.base15'
+    )
+    subsets = {
+        key: set(
+            id_list[bit] for bit in 
+            from_one_hot_encoding(encoding)
+        )
+        for key, encoding in zip(bigrams, encodings)
+    }
+    return PackedIndex(
+        id_list=id_list, subsets=subsets
+    )
+
+
+def save_one_packed_index(bigrams, bigram, packed_index):
+    index_list_path = INDEX['INDEX'] / f'{bigram}.env.base15'
+    subset_path = INDEX['SUBSETS'] / f'{bigram}.env.base15'
+    write_base15(index_list_path, packed_index.id_list)
+    write_base15(subset_path, [
+        to_one_hot_encoding_sum(
+            packed_index.id_list.index(id)
+            for id in packed_index.subsets[key]
+        )
+        for key in bigrams
+    ])
+
+
+def save_packed_index_results(
+        mappers: Mappers,
+        packed_index_results: Dict[str,PackedIndex]
+    ):
+    bigrams = mappers.ngram_lists['alphabet'][2]
+    for bigram, packed_index in packed_index_results.items():
+        save_one_packed_index(bigrams, bigram, packed_index)
 
 
 def save_arpepet_substitutes(mappers, substitutes):
@@ -183,12 +247,12 @@ def load_arpepet_substitutes(
     for n in n_list:
         if substitutes[n] is None:
             substitutes[n] = to_ngram_substitutes(
-                n, mappers, reviewers, ranking.placement
+                mappers, reviewers, ranking.placement, n
             ) 
     return substitutes 
 
 
-def set_search_index(**kwargs):
+def set_packed_index(**kwargs):
 
     mon_list = [*kwargs['mon_list']]
     del kwargs['mon_list']
@@ -200,7 +264,7 @@ def set_search_index(**kwargs):
         )
     )
     print('Finding saved search index')
-    if verify_search_index(mappers):
+    if verify_packed_index(mappers, mon_list):
         print('Using saved search index')
         return
     print(
@@ -242,15 +306,44 @@ def set_search_index(**kwargs):
         'Substitutes for arpepet:',
         len(substitutes['arpepet'][2]), '2-grams,',
         len(substitutes['arpepet'][3]), '3-grams, and',
-        len(substitutes['arpepet'][4]), '4-grams',
-        '\nCreating full search index (from aaaa to zzzz)'
+        len(substitutes['arpepet'][4]), '4-grams'
     )
-    search_index = index_search_results(
-        mappers, pronunciations, substitutes
+    checklist_keys = [
+        ('alphabet', 2), ('alphabet', 3),
+        ('arpepet', 3)
+    ]
+    print(
+        'Finding results for:', ', '.join([
+            f'{kind} {n}-grams' for kind, n in checklist_keys
+        ])
     )
-    # TODO: aggregate top-level bigram results 
+    ngram_results = read_all_ngram_results(
+        mappers, checklist_keys
+    )
+    if len(ngram_results):
+        print(
+            'Found results for:', ', '.join([
+                f'{kind} {n}-grams' for kind, n in ngram_results
+            ])
+        )
+    all_ngram_results = {
+        **ngram_results, **to_all_ngram_results(
+            mappers, pronunciations,
+            [
+                key for key in checklist_keys 
+                if key not in ngram_results
+            ]
+        )
+    }
+    print('\nCreating full search index (from aaaa to zzzz)...')
+    packed_index_results = index_search_results(
+        mappers, all_ngram_results, substitutes,
+        pronunciations, { ('arpepet', 3) }
+    )
+    save_all_ngram_results(mappers, all_ngram_results)
     save_arpepet_substitutes(mappers, substitutes)
-    save_search_index(mappers, search_index)
+    save_packed_index_results(
+        mappers, packed_index_results
+    )
     save_model(mappers, reviewers, ranking)
-    # Phone strings, sorted by rating for readability
     print('Saved!')

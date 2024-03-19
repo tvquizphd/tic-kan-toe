@@ -1,5 +1,5 @@
 from typing import (
-    Dict, Set, Tuple 
+    List, Dict, Set, Tuple 
 )
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -11,40 +11,40 @@ from .ngram import (
     to_all_arpepet_ngrams,
     to_alphabet_ngram,
     to_arpepet_ngram,
-    to_ngram_set,
     Grams
 )
 from .bit_sums import (
+    bitwise_or, bitwise_and,
     to_one_hot_encoding_sum,
-    from_one_hot_encoding_sum,
     check_if_sum_has_index,
+    from_one_hot_encoding,
     sum_all_bit_sums
 )
 from .arpepet import (
     alphabet_to_arpepet 
 )
 
-Result = Tuple[int, int, int, int, int, int]
+Result = Tuple[int, int]
+
 
 class Search(BaseModel):
-    results: Set[Result]
-    tail: Dict[str, 'Search']
-Search.update_forward_refs()
+    broad_results: int
+    narrow_results: int
+    precise_results: int
 
 
-def name_to_result(name):
-    return (
-        name.id,
-        name.bit_sums['alphabet'][2],
-        name.bit_sums['alphabet'][3],
-        name.bit_sums['arpepet'][2],
-        name.bit_sums['arpepet'][3],
-        name.bit_sums['arpepet'][4]
-    )
+class SearchIndex(BaseModel):
+    searches: Dict[str, Search]
+    id_list: List[int]
 
 
-def to_ngram_checker(to_index, from_grams):
-    def ngram_checker(bit_sum, grams):
+class PackedIndex(BaseModel):
+    subsets: Dict[str, Set[int]]
+    id_list: List[int]
+
+
+def to_matcher(to_index, from_grams):
+    def matcher(bit_sum, grams):
         parsed = from_grams(grams)
         return any(
             check_if_sum_has_index(
@@ -52,7 +52,7 @@ def to_ngram_checker(to_index, from_grams):
             )
             for ngram in parsed
         )
-    return ngram_checker 
+    return matcher
 
 
 def to_full_list_matcher(
@@ -61,72 +61,38 @@ def to_full_list_matcher(
     bit_sum = sum_all_bit_sums([
         name.bit_sums for name in pronunciations
     ], kind, n)
-    ngram_checker = to_ngram_checker(
-        to_index, from_grams
-    )
+    matcher = to_matcher(to_index, from_grams)
     def full_list_matcher(grams):
-        return ngram_checker(bit_sum, grams)
+        return matcher(bit_sum, grams)
     return full_list_matcher 
 
 
 def to_result_finder(
         pronunciations, to_index, from_grams, kind, n
     ):
-    ngram_checker = to_ngram_checker(
+    matcher = to_matcher(
         to_index, from_grams
     )
     def result_finder(grams):
-        return set( 
-            name_to_result(name) for name in pronunciations if (
-                ngram_checker(name.bit_sums[kind][n], grams)
+        return to_one_hot_encoding_sum((
+            name.id for name in pronunciations if (
+                matcher(name.bit_sums[kind][n], grams)
             )
-        )
-    return result_finder 
+        ))
+    return result_finder
 
 
-def unpack_results(packed, mon_list):
-    return [
-        mon_list[bit] for bit in 
-        from_one_hot_encoding_sum(packed)
-    ]
-
-
-def pack_results(results):
-    return to_one_hot_encoding_sum(
-        result[0] for result in results
+def to_packed_index(index: SearchIndex):
+    return PackedIndex(
+        id_list=index.id_list, subsets={
+            key: from_one_hot_encoding(search.broad_results)
+            for key, search in index.searches.items()
+        }
     )
 
 
-def to_ruled_out_sum_filter(
-        to_index, ruled_out_sum, n_i
-    ):
-    def ruled_out_sum_filter(ngram):
-        return any(
-            check_if_sum_has_index(
-                ruled_out_sum, to_index(part)
-            )
-            for part in to_ngram_set(ngram, n_i)
-        )
-    return ruled_out_sum_filter
-
-
-def to_rule_out(mappers, all_ngram_results, kind, n):
-    for n_i in range(n, 0, -1):
-        if (kind, n_i) not in all_ngram_results:
-            continue
-        ngram_results = all_ngram_results[(kind, n_i)]
-        to_index = mappers.ngram_indexer(kind, n_i)
-        parts = mappers.ngram_lists[kind][n_i]
-        ruled_out_sum = to_one_hot_encoding_sum([
-            bit for bit, part in enumerate(parts)
-            if len(ngram_results[part]) == 0
-        ])
-        return to_ruled_out_sum_filter(
-            to_index, ruled_out_sum, n_i
-        )
-    def no_filter(_):
-        return False 
-    return no_filter
+def name_to_result(name):
+    return name.id, len(name.phones)
 
 
 def to_specific_search(mappers, kind, n):
@@ -153,17 +119,17 @@ def to_results_finder(mappers, pronunciations, keys):
     }
     def results_finder(threadpool_args):
         (
-            kind, n, ngram, ruled_out, log
+            kind, n, ngram, log
         ) = threadpool_args
         find_in_full_list = full_list_matchers[(kind, n)]
-        found = not ruled_out and find_in_full_list(
+        found = find_in_full_list(
             Grams(**{ kind: ngram })
         )
         if not found:
-            return ngram, set()
+            return ngram, 0
         log(ngram, ngram[0], kind, n)
-        find_result = result_finders[(kind, n)]
-        return ngram, find_result(
+        result_finder = result_finders[(kind, n)]
+        return ngram, result_finder(
             Grams(**{ kind: ngram })
         )
     return results_finder
@@ -193,13 +159,10 @@ def to_all_ngram_results(
     all_ngram_results = {}
     for kind, n in keys:
         print(f'{kind} {n}-grams...')
-        rule_out = to_rule_out(
-            mappers, all_ngram_results, kind, n
-        )
         with ThreadPoolExecutor(n_threads) as threadpool:
             all_ngram_results[(kind, n)] = dict(
                 threadpool.map(results_finder, [
-                    (kind, n, ngram, rule_out(ngram), log)
+                    (kind, n, ngram, log)
                     for ngram in mappers.ngram_lists[kind][n]
                 ])
             )
@@ -207,21 +170,21 @@ def to_all_ngram_results(
     return all_ngram_results
 
 
-def index_results(
-        all_ngram_results, substitutes, kind, n, ngram
-    ):
-    subs =  substitutes.get(kind, {}).get(n, {})
-    ngram_results = all_ngram_results[(kind, n)]
-    return ngram_results[subs.get(ngram, ngram)]
+def format_searching_log(grams, searching):
+    return '('.join([
+        '->'.join([grams.alphabet, grams.arpepet]),
+        '/'.join([
+            f'{matches.bit_count()}' for matches in
+            sorted(set(searching))
+        ])
+    ]) + ')'
 
 
-def to_results_merger(
-        mappers, pronunciations, substitutes, checklist
+def to_searcher(
+        mappers, all_ngram_results, checklist,
+        most_precise_keys
     ):
-    all_ngram_results = to_all_ngram_results(
-        mappers, pronunciations, checklist.keys()
-    )
-    def results_merger(threadpool_args):
+    def searcher(threadpool_args):
         (alphabet_4gram, log) = threadpool_args
         bigrams = [
             alphabet_4gram[:2], alphabet_4gram[2:]
@@ -232,23 +195,79 @@ def to_results_merger(
                 alphabet_to_arpepet(mappers, alphabet_4gram)
             )
         )
-        results = set().union(*[
-            index_results(
-                all_ngram_results, substitutes, kind, n, ngram
+        searching = [None, None, None]
+        precise_key = len(searching) - 1
+        comparisons = [bitwise_or, bitwise_or, bitwise_and]
+        for (kind, n), from_grams in checklist.items():
+            results = bitwise_or(
+                all_ngram_results[(kind, n)][ngram]
+                for ngram in from_grams(grams)
             )
-            for (kind, n), from_grams in checklist.items()
-            for ngram in from_grams(grams)
+            for i,fn in enumerate(comparisons):
+                if i == 0 or (kind, n) in most_precise_keys:
+                    if searching[i] != None:
+                        searching[i] = fn([searching[i], results])
+                    else:
+                        searching[i] = results
+        if searching[precise_key] > 0:
+            log(format_searching_log(grams, searching), bigrams[0])
+        return bigrams, Search(
+            precise_results=searching[2],
+            narrow_results=searching[1],
+            broad_results=searching[0]
+        )
+    return searcher
+
+
+def count_results(ids, results):
+    return {
+        id: len([
+            None for result in results
+            if check_if_sum_has_index(result, id)
         ])
-        n_log_minimum = 10
-        n_found = len(results)
-        if n_found >= n_log_minimum:
-            log(f'{grams.alphabet}: {n_found}', bigrams[0])
-        return bigrams, Search(results=results, tail={})
-    return results_merger
+        for id in ids
+    }
+
+
+def sortSearchResults(searches, pronunciations):
+    '''Sort from specific to generic
+    '''
+    mon_ids_to_length = {
+        name.id: len(name.phones) for name in pronunciations
+    }
+    broad_sum = bitwise_or([
+        search.broad_results for search in searches
+    ])
+    broad_ids = [
+        name.id for name in pronunciations
+        if check_if_sum_has_index(broad_sum, name.id)
+    ]
+    broad_counts = count_results(broad_ids, [
+        search.broad_results for search in searches
+    ])
+    narrow_counts = count_results(broad_ids, [
+        search.narrow_results for search in searches
+    ])
+    precise_counts = count_results(broad_ids, [
+        search.precise_results for search in searches
+    ])
+    total = len(searches)
+    return [
+        measured[-1] for measured in sorted([
+            (
+                total - broad_counts[id],
+                total - narrow_counts[id],
+                total - precise_counts[id],
+                mon_ids_to_length[id], id
+            )
+            for id in broad_ids
+        ], reverse=True)
+    ]
 
 
 def index_search_results(
-        mappers, pronunciations, substitutes
+        mappers, all_ngram_results, substitutes,
+        pronunciations, most_precise_keys
     ):
     """Finds matching pronunciations for all 456,976
     combinations of four latin alphabet letters. The
@@ -259,39 +278,44 @@ def index_search_results(
         - any arpepet 4-gram matches
     """
     checklist = {
-        ('alphabet', 2): to_alphabet_bigram_start,
-        ('alphabet', 3): to_alphabet_trigram_end,
-        ('arpepet', 3): to_all_arpepet_ngram_start(3),
-        ('arpepet', 4): to_all_arpepet_ngrams(4)
+        k:v for k,v in ({
+            ('alphabet', 2): to_alphabet_bigram_start,
+            ('alphabet', 3): to_alphabet_trigram_end,
+            ('arpepet', 3): to_all_arpepet_ngram_start(
+                substitutes['arpepet'][3], 3
+            ),
+            ('arpepet', 4): to_all_arpepet_ngrams(
+                substitutes['arpepet'][4], 4
+            )
+        }).items()
+        if k in all_ngram_results
     }
-    print(
-        'Finding results for:', ', '.join([
-            f'{kind} {n}-grams' for kind, n in checklist
-        ])
+    searcher = to_searcher(
+        mappers, all_ngram_results, checklist,
+        most_precise_keys
     )
-    merge_results = to_results_merger(
-        mappers, pronunciations, substitutes, checklist
-    )
-    print('\nFound ngram results. Finding search results...')
-    search_index = {
-        bigram: Search(tail={}, results=set())
+    indices = {
+        bigram: SearchIndex(searches={}, id_list=[])
         for bigram in mappers.ngram_lists['alphabet'][2]
     }
     log = to_lock_log()
     n_threads = mappers.n_threads
     with ThreadPoolExecutor(n_threads) as threadpool:
-        searches = threadpool.map(merge_results, [
+        searches = threadpool.map(searcher, [
             (alphabet_4gram, log) for alphabet_4gram 
             in mappers.ngram_lists['alphabet'][4]
         ])
-        for bigrams, search in searches:
-            search_index[bigrams[0]].tail[bigrams[1]] = search
+        # Merge search results
+        for keys, search in searches:
+            indices[keys[0]].searches[keys[1]] = search
+        # Sort search results
+        for index in indices.values():
+            searches = index.searches.values()
+            index.id_list = sortSearchResults(
+                searches, pronunciations
+            )
     print('\nFound search results.')
     return {
-        k0: {
-            k1: pack_results(v1.results)
-            for k1,v1 in v0.tail.items()
-        } 
-        for k0,v0 in search_index.items()
+        k0: to_packed_index(v0)
+        for k0,v0 in indices.items()
     }
-
