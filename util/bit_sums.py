@@ -4,10 +4,6 @@ from .ngram import to_ngram_set
 BitSums = dict[str, dict[int, int]]
 
 
-def bitwise_and(bit_list):
-    return reduce(lambda x, y: x & y, bit_list, 0)
-
-
 def bitwise_or(bit_list):
     return reduce(lambda x, y: x | y, bit_list, 0)
 

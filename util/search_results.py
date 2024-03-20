@@ -5,16 +5,14 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from pydantic import BaseModel
 from .ngram import (
-    to_alphabet_bigram_start,
-    to_alphabet_trigram_end,
-    to_all_arpepet_ngram_start,
-    to_all_arpepet_ngrams,
+    to_arpepet_ngram_start,
+    to_all_alphabet_ngrams,
     to_alphabet_ngram,
     to_arpepet_ngram,
     Grams
 )
 from .bit_sums import (
-    bitwise_or, bitwise_and,
+    bitwise_or,
     to_one_hot_encoding_sum,
     check_if_sum_has_index,
     from_one_hot_encoding,
@@ -28,9 +26,9 @@ Result = Tuple[int, int]
 
 
 class Search(BaseModel):
-    broad_results: int
-    narrow_results: int
-    precise_results: int
+    listed_search: List[int]
+    narrow_search: int
+    broad_search: int
 
 
 class SearchIndex(BaseModel):
@@ -85,7 +83,10 @@ def to_result_finder(
 def to_packed_index(index: SearchIndex):
     return PackedIndex(
         id_list=index.id_list, subsets={
-            key: from_one_hot_encoding(search.broad_results)
+            key: from_one_hot_encoding(
+                search.narrow_search or
+                search.broad_search
+            )
             for key, search in index.searches.items()
         }
     )
@@ -170,20 +171,29 @@ def to_all_ngram_results(
     return all_ngram_results
 
 
-def format_searching_log(grams, searching):
+def to_search_log(grams, search):
     return '('.join([
         '->'.join([grams.alphabet, grams.arpepet]),
         '/'.join([
             f'{matches.bit_count()}' for matches in
-            sorted(set(searching))
+            [ search.narrow_search, search.broad_search ]
         ])
     ]) + ')'
 
 
 def to_searcher(
-        mappers, all_ngram_results, checklist,
-        most_precise_keys
+        mappers, all_ngram_results, substitutes, sorted_ngram_keys 
     ):
+    ngram_parsers = {
+        ('arpepet', 3): to_arpepet_ngram_start(
+            substitutes['arpepet'][3], 3
+        ),
+        ('arpepet', 4): to_arpepet_ngram_start(
+            substitutes['arpepet'][4], 4
+        ),
+        ('alphabet', 3): to_all_alphabet_ngrams(3),
+        ('alphabet', 4): to_alphabet_ngram 
+    }
     def searcher(threadpool_args):
         (alphabet_4gram, log) = threadpool_args
         bigrams = [
@@ -195,27 +205,21 @@ def to_searcher(
                 alphabet_to_arpepet(mappers, alphabet_4gram)
             )
         )
-        searching = [None, None, None]
-        precise_key = len(searching) - 1
-        comparisons = [bitwise_or, bitwise_or, bitwise_and]
-        for (kind, n), from_grams in checklist.items():
-            results = bitwise_or(
-                all_ngram_results[(kind, n)][ngram]
-                for ngram in from_grams(grams)
+        listed_search = [
+            bitwise_or(
+                all_ngram_results[key][ngram]
+                for ngram in ngram_parsers[key](grams)
             )
-            for i,fn in enumerate(comparisons):
-                if i == 0 or (kind, n) in most_precise_keys:
-                    if searching[i] != None:
-                        searching[i] = fn([searching[i], results])
-                    else:
-                        searching[i] = results
-        if searching[precise_key] > 0:
-            log(format_searching_log(grams, searching), bigrams[0])
-        return bigrams, Search(
-            precise_results=searching[2],
-            narrow_results=searching[1],
-            broad_results=searching[0]
+            for key in sorted_ngram_keys
+        ]
+        search = Search(
+            listed_search = listed_search,
+            broad_search = bitwise_or(listed_search),
+            narrow_search = bitwise_or(listed_search[:2])
         )
+        if search.narrow_search > 0:
+            log(to_search_log(grams, search), bigrams[0])
+        return bigrams, search
     return searcher
 
 
@@ -229,35 +233,31 @@ def count_results(ids, results):
     }
 
 
-def sortSearchResults(searches, pronunciations):
+def sortSearchResults(searches, pronunciations, search_range):
     '''Sort from specific to generic
     '''
     mon_ids_to_length = {
         name.id: len(name.phones) for name in pronunciations
     }
     broad_sum = bitwise_or([
-        search.broad_results for search in searches
+        search.broad_search for search in searches
     ])
     broad_ids = [
         name.id for name in pronunciations
         if check_if_sum_has_index(broad_sum, name.id)
     ]
-    broad_counts = count_results(broad_ids, [
-        search.broad_results for search in searches
-    ])
-    narrow_counts = count_results(broad_ids, [
-        search.narrow_results for search in searches
-    ])
-    precise_counts = count_results(broad_ids, [
-        search.precise_results for search in searches
-    ])
+    counts = [
+        count_results(broad_ids, [
+            search.listed_search[i] for search in searches
+        ])
+        for i in search_range
+    ]
     total = len(searches)
     return [
         measured[-1] for measured in sorted([
-            (
-                total - broad_counts[id],
-                total - narrow_counts[id],
-                total - precise_counts[id],
+            tuple(
+                (total - count[id]) for count in counts
+            ) + (
                 mon_ids_to_length[id], id
             )
             for id in broad_ids
@@ -267,7 +267,7 @@ def sortSearchResults(searches, pronunciations):
 
 def index_search_results(
         mappers, all_ngram_results, substitutes,
-        pronunciations, most_precise_keys
+        pronunciations, sorted_ngram_keys 
     ):
     """Finds matching pronunciations for all 456,976
     combinations of four latin alphabet letters. The
@@ -277,22 +277,9 @@ def index_search_results(
         - initial arpepet 3-gram matches
         - any arpepet 4-gram matches
     """
-    checklist = {
-        k:v for k,v in ({
-            ('alphabet', 2): to_alphabet_bigram_start,
-            ('alphabet', 3): to_alphabet_trigram_end,
-            ('arpepet', 3): to_all_arpepet_ngram_start(
-                substitutes['arpepet'][3], 3
-            ),
-            ('arpepet', 4): to_all_arpepet_ngrams(
-                substitutes['arpepet'][4], 4
-            )
-        }).items()
-        if k in all_ngram_results
-    }
+    search_range = list(range(len(sorted_ngram_keys)))
     searcher = to_searcher(
-        mappers, all_ngram_results, checklist,
-        most_precise_keys
+        mappers, all_ngram_results, substitutes, sorted_ngram_keys 
     )
     indices = {
         bigram: SearchIndex(searches={}, id_list=[])
@@ -312,7 +299,7 @@ def index_search_results(
         for index in indices.values():
             searches = index.searches.values()
             index.id_list = sortSearchResults(
-                searches, pronunciations
+                searches, pronunciations, search_range
             )
     print('\nFound search results.')
     return {

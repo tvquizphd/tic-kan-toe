@@ -64,7 +64,7 @@ def to_mappers():
         ipa_to_arpabet = (
             ARPABETMapper().map_unicode_string
         ),
-        alphabet_n_sum_set = { 2, 3 },
+        alphabet_n_sum_set = n_full_set,
         arpepet_n_sum_set = n_full_set,
         alphabet_list =  all_letters['alphabet'],
         arpepet_list =  all_letters['arpepet'],

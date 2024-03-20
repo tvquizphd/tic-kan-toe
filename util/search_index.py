@@ -29,7 +29,7 @@ from .search_results import (
     to_all_ngram_results
 )
 
-VERSION = "v1.1.0"
+VERSION = "v1.2.0"
 INDEX = {
     k: Path('data') / v for k,v in
     {
@@ -149,10 +149,10 @@ def read_one_ngram_result(mappers, kind, n):
         return None
 
 
-def read_all_ngram_results(mappers, checklist_keys):
+def read_all_ngram_results(mappers, sorted_ngram_keys):
     results = {
         key: read_one_ngram_result(mappers, *key)
-        for key in checklist_keys
+        for key in sorted_ngram_keys
     }
     return {
         k: v for k,v in results.items() if v
@@ -300,7 +300,7 @@ def set_packed_index(**kwargs):
     substitutes = {
         'arpepet': load_arpepet_substitutes(
             [2, 3, 4], mappers, reviewers, ranking
-        ) 
+        )
     }
     print(
         'Substitutes for arpepet:',
@@ -308,37 +308,33 @@ def set_packed_index(**kwargs):
         len(substitutes['arpepet'][3]), '3-grams, and',
         len(substitutes['arpepet'][4]), '4-grams'
     )
-    checklist_keys = [
-        ('alphabet', 2), ('alphabet', 3),
-        ('arpepet', 3)
+    sorted_ngram_keys = [
+        (kind, n)
+        for n in (4, 3)
+        for kind in ('alphabet', 'arpepet')
     ]
     print(
         'Finding results for:', ', '.join([
-            f'{kind} {n}-grams' for kind, n in checklist_keys
-        ])
+            f'{kind} {n}-grams' for kind, n in sorted_ngram_keys
+        ]), '...'
     )
     ngram_results = read_all_ngram_results(
-        mappers, checklist_keys
+        mappers, sorted_ngram_keys
     )
-    if len(ngram_results):
-        print(
-            'Found results for:', ', '.join([
-                f'{kind} {n}-grams' for kind, n in ngram_results
-            ])
-        )
     all_ngram_results = {
         **ngram_results, **to_all_ngram_results(
             mappers, pronunciations,
             [
-                key for key in checklist_keys 
+                key for key in sorted_ngram_keys 
                 if key not in ngram_results
             ]
         )
     }
-    print('\nCreating full search index (from aaaa to zzzz)...')
+    print('\nFound n-gram results.')
+    print('Creating full search index (from aaaa to zzzz)...')
     packed_index_results = index_search_results(
         mappers, all_ngram_results, substitutes,
-        pronunciations, { ('arpepet', 3) }
+        pronunciations, sorted_ngram_keys 
     )
     save_all_ngram_results(mappers, all_ngram_results)
     save_arpepet_substitutes(mappers, substitutes)
