@@ -15,6 +15,14 @@ def to_arpepet_ngram(grams: Grams):
     return set([grams.arpepet])
 
 
+def to_alphabet_ngram_start(n):
+    def to_ngram_start(grams: Grams):
+        if len(grams.alphabet) < n:
+            return set()
+        return set([ grams.alphabet[:n] ])
+    return to_ngram_start
+
+
 def to_arpepet_ngram_start(subs, n):
     def to_ngram_start(grams: Grams):
         arpepet = subs.get(

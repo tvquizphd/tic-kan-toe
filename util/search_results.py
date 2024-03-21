@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from pydantic import BaseModel
 from .ngram import (
+    to_alphabet_ngram_start,
     to_arpepet_ngram_start,
     to_all_alphabet_ngrams,
     to_alphabet_ngram,
@@ -156,11 +157,10 @@ def to_all_ngram_results(
         mappers, pronunciations, keys
     )
     log = to_lock_log()
-    n_threads = mappers.n_threads
     all_ngram_results = {}
     for kind, n in keys:
         print(f'{kind} {n}-grams...')
-        with ThreadPoolExecutor(n_threads) as threadpool:
+        with ThreadPoolExecutor(mappers.n_threads) as threadpool:
             all_ngram_results[(kind, n)] = dict(
                 threadpool.map(results_finder, [
                     (kind, n, ngram, log)
@@ -182,17 +182,21 @@ def to_search_log(grams, search):
 
 
 def to_searcher(
-        mappers, all_ngram_results, substitutes, sorted_ngram_keys 
+        mappers, all_ngram_results, substitutes,
+        sorted_ngram_keys, num_narrow_keys
     ):
     ngram_parsers = {
-        ('arpepet', 3): to_arpepet_ngram_start(
-            substitutes['arpepet'][3], 3
-        ),
-        ('arpepet', 4): to_arpepet_ngram_start(
-            substitutes['arpepet'][4], 4
-        ),
-        ('alphabet', 3): to_all_alphabet_ngrams(3),
-        ('alphabet', 4): to_alphabet_ngram 
+        **{
+            ('arpepet', n): to_arpepet_ngram_start(
+                substitutes['arpepet'][n], n
+            )
+            for n in [3, 4]
+        },
+        **{
+            ('alphabet', n): to_all_alphabet_ngrams(n)
+            for n in [3, 4]
+        },
+        ('alphabet', 2): to_alphabet_ngram_start(2)
     }
     def searcher(threadpool_args):
         (alphabet_4gram, log) = threadpool_args
@@ -215,7 +219,9 @@ def to_searcher(
         search = Search(
             listed_search = listed_search,
             broad_search = bitwise_or(listed_search),
-            narrow_search = bitwise_or(listed_search[:2])
+            narrow_search = bitwise_or(
+                listed_search[:num_narrow_keys]
+            )
         )
         if search.narrow_search > 0:
             log(to_search_log(grams, search), bigrams[0])
@@ -267,7 +273,7 @@ def sortSearchResults(searches, pronunciations, search_range):
 
 def index_search_results(
         mappers, all_ngram_results, substitutes,
-        pronunciations, sorted_ngram_keys 
+        pronunciations, sorted_ngram_keys, num_narrow_keys
     ):
     """Finds matching pronunciations for all 456,976
     combinations of four latin alphabet letters. The
@@ -279,15 +285,15 @@ def index_search_results(
     """
     search_range = list(range(len(sorted_ngram_keys)))
     searcher = to_searcher(
-        mappers, all_ngram_results, substitutes, sorted_ngram_keys 
+        mappers, all_ngram_results, substitutes,
+        sorted_ngram_keys, num_narrow_keys
     )
     indices = {
         bigram: SearchIndex(searches={}, id_list=[])
         for bigram in mappers.ngram_lists['alphabet'][2]
     }
     log = to_lock_log()
-    n_threads = mappers.n_threads
-    with ThreadPoolExecutor(n_threads) as threadpool:
+    with ThreadPoolExecutor(mappers.n_threads) as threadpool:
         searches = threadpool.map(searcher, [
             (alphabet_4gram, log) for alphabet_4gram 
             in mappers.ngram_lists['alphabet'][4]

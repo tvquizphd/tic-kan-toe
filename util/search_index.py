@@ -29,7 +29,7 @@ from .search_results import (
     to_all_ngram_results
 )
 
-VERSION = "v1.2.0"
+VERSION = "v1.3.0"
 INDEX = {
     k: Path('data') / v for k,v in
     {
@@ -308,10 +308,12 @@ def set_packed_index(**kwargs):
         len(substitutes['arpepet'][3]), '3-grams, and',
         len(substitutes['arpepet'][4]), '4-grams'
     )
+    num_narrow_keys = 2
     sorted_ngram_keys = [
         (kind, n)
-        for n in (4, 3)
+        for n in (4, 3, 2)
         for kind in ('alphabet', 'arpepet')
+        if (kind, n) != ('arpepet', 2)
     ]
     print(
         'Finding results for:', ', '.join([
@@ -334,7 +336,7 @@ def set_packed_index(**kwargs):
     print('Creating full search index (from aaaa to zzzz)...')
     packed_index_results = index_search_results(
         mappers, all_ngram_results, substitutes,
-        pronunciations, sorted_ngram_keys 
+        pronunciations, sorted_ngram_keys, num_narrow_keys
     )
     save_all_ngram_results(mappers, all_ngram_results)
     save_arpepet_substitutes(mappers, substitutes)
