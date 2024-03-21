@@ -183,7 +183,7 @@ def to_search_log(grams, search):
 
 def to_searcher(
         mappers, all_ngram_results, substitutes,
-        sorted_ngram_keys, num_narrow_keys
+        sorted_ngram_keys, n_narrowest_keys
     ):
     ngram_parsers = {
         **{
@@ -220,7 +220,7 @@ def to_searcher(
             listed_search = listed_search,
             broad_search = bitwise_or(listed_search),
             narrow_search = bitwise_or(
-                listed_search[:num_narrow_keys]
+                listed_search[:n_narrowest_keys]
             )
         )
         if search.narrow_search > 0:
@@ -273,7 +273,7 @@ def sortSearchResults(searches, pronunciations, search_range):
 
 def index_search_results(
         mappers, all_ngram_results, substitutes,
-        pronunciations, sorted_ngram_keys, num_narrow_keys
+        pronunciations, sorted_ngram_keys, n_narrowest_keys
     ):
     """Finds matching pronunciations for all 456,976
     combinations of four latin alphabet letters. The
@@ -286,7 +286,7 @@ def index_search_results(
     search_range = list(range(len(sorted_ngram_keys)))
     searcher = to_searcher(
         mappers, all_ngram_results, substitutes,
-        sorted_ngram_keys, num_narrow_keys
+        sorted_ngram_keys, n_narrowest_keys
     )
     indices = {
         bigram: SearchIndex(searches={}, id_list=[])

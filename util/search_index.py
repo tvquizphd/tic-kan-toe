@@ -236,15 +236,18 @@ def save_model(mappers, reviewers, ranking):
 
 
 def load_arpepet_substitutes(
-        n_list, mappers, reviewers, ranking 
+        mappers, reviewers, ranking 
     ):
+    n_key_set = set(
+        mappers.ngram_lists['arpepet'].keys()
+    )
     substitutes = {
         n: read_fit_substitute_dict(
             INDEX[f'{n}_PHONES'], mappers.arpepet_list
         )
-        for n in n_list 
+        for n in n_key_set
     }
-    for n in n_list:
+    for n in n_key_set:
         if substitutes[n] is None:
             substitutes[n] = to_ngram_substitutes(
                 mappers, reviewers, ranking.placement, n
@@ -299,7 +302,7 @@ def set_packed_index(**kwargs):
     # Map phones that are missing
     substitutes = {
         'arpepet': load_arpepet_substitutes(
-            [2, 3, 4], mappers, reviewers, ranking
+            mappers, reviewers, ranking
         )
     }
     print(
@@ -308,7 +311,7 @@ def set_packed_index(**kwargs):
         len(substitutes['arpepet'][3]), '3-grams, and',
         len(substitutes['arpepet'][4]), '4-grams'
     )
-    num_narrow_keys = 2
+    n_narrowest_keys = 2
     sorted_ngram_keys = [
         (kind, n)
         for n in (4, 3, 2)
@@ -336,7 +339,7 @@ def set_packed_index(**kwargs):
     print('Creating full search index (from aaaa to zzzz)...')
     packed_index_results = index_search_results(
         mappers, all_ngram_results, substitutes,
-        pronunciations, sorted_ngram_keys, num_narrow_keys
+        pronunciations, sorted_ngram_keys, n_narrowest_keys
     )
     save_all_ngram_results(mappers, all_ngram_results)
     save_arpepet_substitutes(mappers, substitutes)
